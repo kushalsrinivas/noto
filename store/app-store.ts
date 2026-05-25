@@ -22,6 +22,10 @@ export type Note = {
   recordingId?: string;
   transcriptionStatus?: "transcribing" | "done" | "failed";
   transcriptionError?: string;
+  aiSummary?: string;
+  aiKeyPoints?: string[];
+  aiTasks?: string[];
+  aiStatus?: "processing" | "done" | "failed";
 };
 
 export type Task = {

@@ -44,7 +44,14 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "llama.rn",
+        {
+          "enableEntitlements": true,
+          "entitlementsProfile": "production"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

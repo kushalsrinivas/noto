@@ -1,12 +1,15 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { LlmDownloadModal } from "@/components/llm-download-modal";
 import { ThemedText } from "@/components/themed-text";
 import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
+import { isLlmModelDownloaded, isLlmSupported } from "@/lib/llama";
 import {
   useNotes,
   useTasks,
@@ -32,12 +35,36 @@ function formatRelativeTime(dateStr: string) {
   return `${days}d ago`;
 }
 
+const LLM_PROMPT_KEY = "@noto/llm_download_prompted";
+
 export default function HomeScreen() {
   const colors = useColors();
   const { name } = useUserName();
   const { notes, reload: reloadNotes } = useNotes();
   const { tasks, reload: reloadTasks } = useTasks();
   const { stats, reload: reloadStats } = useUsageStats();
+  const [showLlmModal, setShowLlmModal] = useState(false);
+
+  useEffect(() => {
+    if (!isLlmSupported()) return;
+    if (isLlmModelDownloaded()) return;
+
+    AsyncStorage.getItem(LLM_PROMPT_KEY).then((prompted) => {
+      if (!prompted) {
+        setShowLlmModal(true);
+      }
+    });
+  }, []);
+
+  const handleLlmDismiss = useCallback(async () => {
+    await AsyncStorage.setItem(LLM_PROMPT_KEY, "true");
+    setShowLlmModal(false);
+  }, []);
+
+  const handleLlmComplete = useCallback(async () => {
+    await AsyncStorage.setItem(LLM_PROMPT_KEY, "true");
+    setShowLlmModal(false);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -299,6 +326,12 @@ export default function HomeScreen() {
 
         <View style={{ height: Spacing["3xl"] }} />
       </ScrollView>
+
+      <LlmDownloadModal
+        visible={showLlmModal}
+        onDismiss={handleLlmDismiss}
+        onComplete={handleLlmComplete}
+      />
     </SafeAreaView>
   );
 }

@@ -1,5 +1,6 @@
 import type { Note, Recording } from "@/store/app-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { processTranscriptionWithLlm } from "./ai-processing";
 import { ensureModel, transcribe as whisperTranscribe } from "./whisper";
 
 const NOTES_KEY = "@noto/notes";
@@ -88,6 +89,10 @@ async function runTranscription(
         : n,
     );
     await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(updatedNotes));
+
+    processTranscriptionWithLlm(noteId).catch((err) =>
+      console.warn("LLM processing failed (non-blocking):", err),
+    );
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Unknown transcription error";

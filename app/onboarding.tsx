@@ -23,8 +23,6 @@ export default function OnboardingScreen() {
   const { markComplete } = useOnboarding();
   const ring = useSharedValue(1);
 
-  // Pre-download the Whisper model while the user reads the screen.
-  // If it finishes before they record, transcription will be instant.
   useEffect(() => {
     ensureModel().catch(() => {});
   }, []);
