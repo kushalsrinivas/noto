@@ -20,6 +20,8 @@ export type Note = {
   source: "voice" | "manual";
   tags: string[];
   recordingId?: string;
+  transcriptionStatus?: "transcribing" | "done" | "failed";
+  transcriptionError?: string;
 };
 
 export type Task = {

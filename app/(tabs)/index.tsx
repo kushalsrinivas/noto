@@ -1,5 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -34,9 +35,17 @@ function formatRelativeTime(dateStr: string) {
 export default function HomeScreen() {
   const colors = useColors();
   const { name } = useUserName();
-  const { notes } = useNotes();
-  const { tasks } = useTasks();
-  const { stats } = useUsageStats();
+  const { notes, reload: reloadNotes } = useNotes();
+  const { tasks, reload: reloadTasks } = useTasks();
+  const { stats, reload: reloadStats } = useUsageStats();
+
+  useFocusEffect(
+    useCallback(() => {
+      reloadNotes();
+      reloadTasks();
+      reloadStats();
+    }, [reloadNotes, reloadTasks, reloadStats]),
+  );
 
   const pendingTasks = tasks.filter((t) => !t.completed);
   const todayTasks = pendingTasks.filter((t) => {

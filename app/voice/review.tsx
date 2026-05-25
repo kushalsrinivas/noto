@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,11 +16,12 @@ import { ThemedText } from "@/components/themed-text";
 import { Button } from "@/components/ui/button";
 import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
+import { enqueueTranscription } from "@/lib/transcription-queue";
+import { isTranscriptionSupported } from "@/lib/whisper";
 import {
   useNotes,
   useOnboarding,
   useRecordings,
-  useTasks,
   useUsageStats,
 } from "@/store/app-store";
 
@@ -40,32 +40,16 @@ export default function ReviewScreen() {
   const durationSecs = parseInt(duration || "0", 10);
 
   const { addNote } = useNotes();
-  const { addTask } = useTasks();
   const { addRecording } = useRecordings();
   const { complete: onboardingComplete, markComplete } = useOnboarding();
   const { incrementRecording, incrementNote } = useUsageStats();
 
-  const [transcript, setTranscript] = useState("");
   const [saveAsNote, setSaveAsNote] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [step, setStep] = useState<"processing" | "review">("processing");
 
-  // Playback state
   const soundRef = useRef<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackPosition, setPlaybackPosition] = useState(0);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setTranscript(
-        uri
-          ? `Voice recording (${formatDuration(durationSecs)})\n\nRecorded on ${new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`
-          : "",
-      );
-      setStep("review");
-    }, 1200);
-    return () => clearTimeout(timeout);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -118,26 +102,34 @@ export default function ReviewScreen() {
       const recording = await addRecording({
         uri: uri || "",
         duration: durationSecs,
-        transcript: transcript || undefined,
       });
 
       await incrementRecording();
 
-      if (saveAsNote) {
-        const title = transcript
-          ? transcript.split("\n")[0]?.trim().slice(0, 50) || "Voice Note"
-          : `Voice Note — ${formatDuration(durationSecs)}`;
+      let noteId: string | undefined;
 
-        await addNote({
-          title,
-          content:
-            transcript || `Voice recording (${formatDuration(durationSecs)})`,
+      if (saveAsNote) {
+        const willTranscribe = isTranscriptionSupported() && !!uri;
+
+        const note = await addNote({
+          title: willTranscribe
+            ? "Transcribing..."
+            : `Voice Note — ${formatDuration(durationSecs)}`,
+          content: willTranscribe
+            ? "Your recording is being transcribed. This usually takes a few seconds."
+            : `Voice recording (${formatDuration(durationSecs)})`,
           source: "voice",
           tags: ["voice"],
           recordingId: recording.id,
+          transcriptionStatus: willTranscribe ? "transcribing" : undefined,
         });
 
+        noteId = note.id;
         await incrementNote();
+
+        if (willTranscribe) {
+          enqueueTranscription(recording.id, note.id, uri);
+        }
       }
 
       if (!onboardingComplete) {
@@ -159,40 +151,6 @@ export default function ReviewScreen() {
       soundRef.current = null;
     }
     router.back();
-  }
-
-  if (step === "processing") {
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.processingCenter}>
-          <ThemedText style={styles.processingTitle}>Processing</ThemedText>
-          <View style={styles.steps}>
-            {[
-              { label: "Saving audio file", done: true },
-              { label: "Preparing review", done: false },
-            ].map((s) => (
-              <View key={s.label} style={styles.stepRow}>
-                <MaterialIcons
-                  name={s.done ? "check" : "more-horiz"}
-                  size={16}
-                  color={s.done ? colors.success : colors.muted}
-                />
-                <ThemedText
-                  style={[
-                    styles.stepLabel,
-                    { color: s.done ? colors.ink : colors.muted },
-                  ]}
-                >
-                  {s.label}
-                </ThemedText>
-              </View>
-            ))}
-          </View>
-        </View>
-      </SafeAreaView>
-    );
   }
 
   return (
@@ -232,28 +190,23 @@ export default function ReviewScreen() {
           </View>
         </View>
 
-        {/* Transcript / Notes */}
-        <View style={styles.section}>
+        {/* What will happen */}
+        <View
+          style={[
+            styles.infoCard,
+            {
+              backgroundColor: colors.accentMuted,
+              borderColor: colors.accent + "20",
+            },
+          ]}
+        >
+          <MaterialIcons name="auto-awesome" size={16} color={colors.accent} />
           <ThemedText
-            style={[styles.sectionLabel, { color: colors.textTertiary }]}
+            style={[styles.infoText, { color: colors.textSecondary }]}
           >
-            NOTES
+            Your recording will be transcribed in the background. You'll see the
+            text in your note when it's ready.
           </ThemedText>
-          <TextInput
-            value={transcript}
-            onChangeText={setTranscript}
-            multiline
-            placeholder="Add notes about this recording..."
-            placeholderTextColor={colors.muted}
-            style={[
-              styles.transcriptInput,
-              {
-                color: colors.ink,
-                backgroundColor: colors.paper2,
-                borderColor: colors.ruleLight,
-              },
-            ]}
-          />
         </View>
 
         {/* Options */}
@@ -323,19 +276,6 @@ export default function ReviewScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl },
-  processingCenter: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: Spacing["3xl"],
-  },
-  processingTitle: {
-    fontFamily: "Geist_600SemiBold",
-    fontSize: 20,
-    marginBottom: Spacing.xl,
-  },
-  steps: { gap: Spacing.md },
-  stepRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
-  stepLabel: { fontFamily: "Geist_400Regular", fontSize: 15 },
   playerCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -360,22 +300,27 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontVariant: ["tabular-nums"],
   },
+  infoCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.md,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing["2xl"],
+  },
+  infoText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+    flex: 1,
+  },
   section: { marginBottom: Spacing["2xl"] },
   sectionLabel: {
     fontFamily: "Geist_500Medium",
     fontSize: 11,
     letterSpacing: 1,
     marginBottom: Spacing.md,
-  },
-  transcriptInput: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 15,
-    lineHeight: 22,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    minHeight: 120,
-    textAlignVertical: "top",
   },
   optionRow: {
     flexDirection: "row",

@@ -15,12 +15,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
+import { ensureModel } from "@/lib/whisper";
 import { useOnboarding } from "@/store/app-store";
 
 export default function OnboardingScreen() {
   const colors = useColors();
   const { markComplete } = useOnboarding();
   const ring = useSharedValue(1);
+
+  // Pre-download the Whisper model while the user reads the screen.
+  // If it finishes before they record, transcription will be instant.
+  useEffect(() => {
+    ensureModel().catch(() => {});
+  }, []);
 
   useEffect(() => {
     ring.value = withRepeat(

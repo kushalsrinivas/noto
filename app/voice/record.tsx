@@ -20,6 +20,34 @@ import { useColors } from "@/hooks/use-theme-color";
 
 type RecordingState = "idle" | "recording" | "paused";
 
+// iOS: WAV (16 kHz mono 16-bit PCM) → Whisper reads this directly.
+// Android: M4A (AAC 16 kHz mono) → needs conversion for Whisper.
+const RECORDING_OPTIONS: Audio.RecordingOptions = {
+  isMeteringEnabled: false,
+  android: {
+    extension: ".m4a",
+    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+    audioEncoder: Audio.AndroidAudioEncoder.AAC,
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 128000,
+  },
+  ios: {
+    extension: ".wav",
+    audioQuality: Audio.IOSAudioQuality.HIGH,
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 256000,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: "audio/webm",
+    bitsPerSecond: 128000,
+  },
+};
+
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -113,9 +141,8 @@ export default function RecordScreen() {
         playsInSilentModeIOS: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
+      const { recording } =
+        await Audio.Recording.createAsync(RECORDING_OPTIONS);
       recordingRef.current = recording;
       setState("recording");
       setElapsed(0);

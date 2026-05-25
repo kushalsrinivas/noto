@@ -29,10 +29,18 @@ export default function NotesScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
 
+  const hasTranscribing = notes.some(
+    (n) => n.transcriptionStatus === "transcribing",
+  );
+
   useFocusEffect(
     useCallback(() => {
       reload();
-    }, [reload]),
+
+      if (!hasTranscribing) return;
+      const interval = setInterval(() => reload(), 3000);
+      return () => clearInterval(interval);
+    }, [reload, hasTranscribing]),
   );
 
   const filtered = notes.filter((n) => {
@@ -48,6 +56,8 @@ export default function NotesScreen() {
   });
 
   function renderNote({ item }: { item: Note }) {
+    const isTranscribing = item.transcriptionStatus === "transcribing";
+
     return (
       <Pressable
         onPress={() => router.push(`/note/${item.id}`)}
@@ -65,12 +75,27 @@ export default function NotesScreen() {
             </ThemedText>
           </View>
           <View style={styles.noteBottomRow}>
-            <ThemedText
-              style={[styles.notePreview, { color: colors.textSecondary }]}
-              numberOfLines={2}
-            >
-              {item.content || "No content"}
-            </ThemedText>
+            {isTranscribing ? (
+              <View style={styles.transcribingRow}>
+                <MaterialIcons
+                  name="more-horiz"
+                  size={14}
+                  color={colors.warning}
+                />
+                <ThemedText
+                  style={[styles.transcribingText, { color: colors.warning }]}
+                >
+                  Transcribing...
+                </ThemedText>
+              </View>
+            ) : (
+              <ThemedText
+                style={[styles.notePreview, { color: colors.textSecondary }]}
+                numberOfLines={2}
+              >
+                {item.content || "No content"}
+              </ThemedText>
+            )}
             {item.source === "voice" && (
               <MaterialIcons
                 name="mic"
@@ -223,5 +248,15 @@ const styles = StyleSheet.create({
   voiceIcon: {
     marginLeft: Spacing.sm,
     marginTop: 3,
+  },
+  transcribingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flex: 1,
+  },
+  transcribingText: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 13,
   },
 });
