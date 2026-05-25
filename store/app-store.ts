@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   RECORDINGS: "@noto/recordings",
   USER_NAME: "@noto/user_name",
   AI_MODE: "@noto/ai_mode",
+  USAGE_STATS: "@noto/usage_stats",
 } as const;
 
 export type Note = {
@@ -274,6 +275,65 @@ export function useRecordings() {
   );
 
   return { recordings, addRecording, deleteRecording, reload };
+}
+
+export type UsageStats = {
+  totalRecordings: number;
+  totalNotes: number;
+  firstUseDate?: string;
+  lastUseDate?: string;
+};
+
+const DEFAULT_STATS: UsageStats = { totalRecordings: 0, totalNotes: 0 };
+
+export function useUsageStats() {
+  const [stats, setStats] = useState<UsageStats>(DEFAULT_STATS);
+
+  useEffect(() => {
+    loadJson<UsageStats>(STORAGE_KEYS.USAGE_STATS, DEFAULT_STATS).then(
+      setStats,
+    );
+  }, []);
+
+  const reload = useCallback(async () => {
+    const data = await loadJson<UsageStats>(
+      STORAGE_KEYS.USAGE_STATS,
+      DEFAULT_STATS,
+    );
+    setStats(data);
+  }, []);
+
+  const incrementRecording = useCallback(async () => {
+    const current = await loadJson<UsageStats>(
+      STORAGE_KEYS.USAGE_STATS,
+      DEFAULT_STATS,
+    );
+    const updated: UsageStats = {
+      ...current,
+      totalRecordings: current.totalRecordings + 1,
+      lastUseDate: new Date().toISOString(),
+      firstUseDate: current.firstUseDate || new Date().toISOString(),
+    };
+    await saveJson(STORAGE_KEYS.USAGE_STATS, updated);
+    setStats(updated);
+  }, []);
+
+  const incrementNote = useCallback(async () => {
+    const current = await loadJson<UsageStats>(
+      STORAGE_KEYS.USAGE_STATS,
+      DEFAULT_STATS,
+    );
+    const updated: UsageStats = {
+      ...current,
+      totalNotes: current.totalNotes + 1,
+      lastUseDate: new Date().toISOString(),
+      firstUseDate: current.firstUseDate || new Date().toISOString(),
+    };
+    await saveJson(STORAGE_KEYS.USAGE_STATS, updated);
+    setStats(updated);
+  }, []);
+
+  return { stats, reload, incrementRecording, incrementNote };
 }
 
 export function useAiMode() {

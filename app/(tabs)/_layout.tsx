@@ -1,10 +1,11 @@
-import { Tabs } from "expo-router";
-import { View, StyleSheet, Platform } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Redirect, Tabs } from "expo-router";
+import { Platform, StyleSheet, View } from "react-native";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { Colors, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useOnboarding } from "@/store/app-store";
 
 function VoiceTabIcon({ focused }: { color: string; focused: boolean }) {
   const scheme = useColorScheme() ?? "light";
@@ -20,6 +21,11 @@ function VoiceTabIcon({ focused }: { color: string; focused: boolean }) {
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
+  const { complete } = useOnboarding();
+
+  if (complete === false) {
+    return <Redirect href="/onboarding" />;
+  }
 
   return (
     <Tabs

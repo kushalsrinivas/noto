@@ -1,21 +1,22 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { View, StyleSheet, Pressable } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Audio } from "expo-av";
+import { router } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
   Easing,
   cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
+import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
-import { Spacing, BorderRadius } from "@/constants/theme";
 
 type RecordingState = "idle" | "recording" | "paused";
 
@@ -30,11 +31,13 @@ export default function RecordScreen() {
   const [state, setState] = useState<RecordingState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const ring1 = useSharedValue(1);
   const ring2 = useSharedValue(1);
-
-  const waveValues = Array.from({ length: 24 }, () => useSharedValue(3));
+  const waveValues = useRef(
+    Array.from({ length: 24 }, () => useSharedValue(3)),
+  ).current;
 
   const startPulse = useCallback(() => {
     ring1.value = withRepeat(
@@ -88,43 +91,107 @@ export default function RecordScreen() {
     }
   }, [state]);
 
-  function startRecording() {
-    setState("recording");
-    setElapsed(0);
-    timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+  async function requestPermissions() {
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission needed",
+        "Microphone access is required to record voice notes.",
+      );
+      return false;
+    }
+    return true;
   }
 
-  function pauseRecording() {
-    setState("paused");
+  async function startRecording() {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+      recordingRef.current = recording;
+      setState("recording");
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+    } catch (err) {
+      Alert.alert("Error", "Failed to start recording. Please try again.");
+    }
+  }
+
+  async function pauseRecording() {
+    try {
+      await recordingRef.current?.pauseAsync();
+      setState("paused");
+      if (timerRef.current) clearInterval(timerRef.current);
+    } catch {
+      // Some devices don't support pause — just keep recording
+    }
+  }
+
+  async function resumeRecording() {
+    try {
+      await recordingRef.current?.startAsync();
+      setState("recording");
+      timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+    } catch {
+      Alert.alert("Error", "Could not resume recording.");
+    }
+  }
+
+  async function stopRecording() {
+    if (!recordingRef.current) return;
+
+    try {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setState("idle");
+
+      await recordingRef.current.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
+
+      if (uri) {
+        router.replace({
+          pathname: "/voice/review",
+          params: { uri, duration: elapsed.toString() },
+        });
+      } else {
+        Alert.alert("Error", "Recording file not found.");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to save recording.");
+    }
+  }
+
+  async function cancel() {
+    if (recordingRef.current) {
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      } catch {}
+      recordingRef.current = null;
+    }
     if (timerRef.current) clearInterval(timerRef.current);
-  }
-
-  function resumeRecording() {
-    setState("recording");
-    timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
-  }
-
-  function stopRecording() {
     setState("idle");
-    if (timerRef.current) clearInterval(timerRef.current);
-    router.replace({
-      pathname: "/voice/review",
-      params: { duration: elapsed.toString() },
-    });
-  }
-
-  function cancel() {
-    setState("idle");
-    if (timerRef.current) clearInterval(timerRef.current);
     router.back();
   }
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-    },
-    [],
-  );
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      }
+    };
+  }, []);
 
   const ring1Style = useAnimatedStyle(() => ({
     transform: [{ scale: ring1.value }],
@@ -161,7 +228,7 @@ export default function RecordScreen() {
               ? "Recording"
               : state === "paused"
                 ? "Paused"
-                : "Ready"}
+                : "Tap to record"}
           </ThemedText>
         </View>
       </View>

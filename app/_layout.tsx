@@ -1,23 +1,24 @@
 import {
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+  Geist_700Bold,
+  useFonts,
+} from "@expo-google-fonts/geist";
+import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
 import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
-import "react-native-reanimated";
-import {
-  useFonts,
-  Geist_400Regular,
-  Geist_500Medium,
-  Geist_600SemiBold,
-  Geist_700Bold,
-} from "@expo-google-fonts/geist";
+import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import "react-native-reanimated";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useOnboarding } from "@/store/app-store";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -51,6 +52,7 @@ const darkNavTheme = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const { complete: onboardingComplete } = useOnboarding();
 
   const [fontsLoaded] = useFonts({
     Geist_400Regular,
@@ -59,13 +61,15 @@ export default function RootLayout() {
     Geist_700Bold,
   });
 
+  const ready = fontsLoaded && onboardingComplete !== null;
+
   useEffect(() => {
-    if (fontsLoaded) {
+    if (ready) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [ready]);
 
-  if (!fontsLoaded) return null;
+  if (!ready) return null;
 
   return (
     <ThemeProvider
@@ -100,6 +104,10 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="search"
+          options={{ headerShown: false, presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="upgrade"
           options={{ headerShown: false, presentation: "modal" }}
         />
       </Stack>

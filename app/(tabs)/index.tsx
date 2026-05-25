@@ -1,13 +1,17 @@
-import { View, StyleSheet, ScrollView, Pressable } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
+import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
-import { useUserName, useNotes, useTasks } from "@/store/app-store";
-import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import {
+  useNotes,
+  useTasks,
+  useUsageStats,
+  useUserName,
+} from "@/store/app-store";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -32,6 +36,7 @@ export default function HomeScreen() {
   const { name } = useUserName();
   const { notes } = useNotes();
   const { tasks } = useTasks();
+  const { stats } = useUsageStats();
 
   const pendingTasks = tasks.filter((t) => !t.completed);
   const todayTasks = pendingTasks.filter((t) => {
@@ -177,6 +182,46 @@ export default function HomeScreen() {
             </ThemedText>
           </View>
         </View>
+
+        {/* Investment signal — show after first recording */}
+        {stats.totalRecordings > 0 && stats.totalRecordings < 3 && (
+          <View style={styles.nudgeBlock}>
+            <ThemedText
+              style={[styles.nudgeText, { color: colors.textSecondary }]}
+            >
+              You've captured {stats.totalRecordings}{" "}
+              {stats.totalRecordings === 1 ? "thought" : "thoughts"} — keep
+              going
+            </ThemedText>
+          </View>
+        )}
+
+        {/* Upgrade nudge — appears after 3+ recordings */}
+        {stats.totalRecordings >= 3 && (
+          <Pressable
+            onPress={() => router.push("/upgrade")}
+            style={[
+              styles.upgradeCard,
+              { borderColor: colors.rule, backgroundColor: colors.paper2 },
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.upgradeTitle}>
+                You've created {stats.totalRecordings} recordings
+              </ThemedText>
+              <ThemedText
+                style={[styles.upgradeDesc, { color: colors.textSecondary }]}
+              >
+                Unlock unlimited recordings, PDF export, and more.
+              </ThemedText>
+            </View>
+            <MaterialIcons
+              name="arrow-forward"
+              size={18}
+              color={colors.textTertiary}
+            />
+          </Pressable>
+        )}
 
         {/* Recent notes */}
         <View style={styles.section}>
@@ -385,5 +430,31 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_400Regular",
     fontSize: 11,
     fontVariant: ["tabular-nums"],
+  },
+  nudgeBlock: {
+    marginBottom: Spacing["3xl"],
+  },
+  nudgeText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 14,
+  },
+  upgradeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing["3xl"],
+    gap: Spacing.md,
+  },
+  upgradeTitle: {
+    fontFamily: "Geist_600SemiBold",
+    fontSize: 15,
+    marginBottom: 3,
+  },
+  upgradeDesc: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

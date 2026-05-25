@@ -1,283 +1,161 @@
-import { useState } from "react";
-import { View, StyleSheet, Pressable, TextInput } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router } from "expo-router";
+import { useEffect } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
-import { Button } from "@/components/ui/button";
+import { Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
-import { useOnboarding, useUserName, useAiMode } from "@/store/app-store";
-import { Spacing, BorderRadius } from "@/constants/theme";
-
-type Step = "welcome" | "features" | "name" | "mode";
-
-const FEATURES = [
-  {
-    icon: "mic" as const,
-    title: "Voice to text",
-    desc: "Record and get an instant transcript.",
-  },
-  {
-    icon: "auto-awesome" as const,
-    title: "Task extraction",
-    desc: "Action items pulled out automatically.",
-  },
-  {
-    icon: "offline-bolt" as const,
-    title: "On-device",
-    desc: "Runs locally. Your data stays yours.",
-  },
-];
+import { useOnboarding } from "@/store/app-store";
 
 export default function OnboardingScreen() {
   const colors = useColors();
   const { markComplete } = useOnboarding();
-  const { setName } = useUserName();
-  const { setMode } = useAiMode();
+  const ring = useSharedValue(1);
 
-  const [step, setStep] = useState<Step>("welcome");
-  const [featureIdx, setFeatureIdx] = useState(0);
-  const [userName, setUserName] = useState("");
-  const [selectedMode, setSelectedMode] = useState<"full" | "lite">("lite");
+  useEffect(() => {
+    ring.value = withRepeat(
+      withSequence(
+        withTiming(1.18, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
+    );
+  }, [ring]);
 
-  async function finish() {
-    if (userName.trim()) await setName(userName.trim());
-    await setMode(selectedMode);
+  const ringStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ring.value }],
+    opacity: 2 - ring.value,
+  }));
+
+  function handleRecord() {
+    router.push("/voice/record");
+  }
+
+  async function handleSkip() {
     await markComplete();
     router.replace("/(tabs)");
   }
 
-  if (step === "welcome") {
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.main}>
-          <ThemedText style={styles.wordmark}>noto</ThemedText>
-          <ThemedText style={[styles.tagline, { color: colors.textTertiary }]}>
-            Speak. Organize. Done.
-          </ThemedText>
-        </View>
-        <View style={styles.bottom}>
-          <Button
-            title="Get started"
-            onPress={() => setStep("features")}
-            size="lg"
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === "features") {
-    const f = FEATURES[featureIdx];
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.skipRow}>
-          <Pressable onPress={() => setStep("name")}>
-            <ThemedText
-              style={[styles.skipText, { color: colors.textTertiary }]}
-            >
-              Skip
-            </ThemedText>
-          </Pressable>
-        </View>
-        <View style={styles.main}>
-          <MaterialIcons
-            name={f.icon}
-            size={32}
-            color={colors.accent}
-            style={{ marginBottom: Spacing.xl }}
-          />
-          <ThemedText style={styles.featureTitle}>{f.title}</ThemedText>
-          <ThemedText
-            style={[styles.featureDesc, { color: colors.textSecondary }]}
-          >
-            {f.desc}
-          </ThemedText>
-          <View style={styles.dots}>
-            {FEATURES.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor:
-                      i === featureIdx ? colors.ink : colors.rule,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-        </View>
-        <View style={styles.bottom}>
-          <Button
-            title={featureIdx < FEATURES.length - 1 ? "Next" : "Continue"}
-            onPress={() => {
-              if (featureIdx < FEATURES.length - 1)
-                setFeatureIdx(featureIdx + 1);
-              else setStep("name");
-            }}
-            size="lg"
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === "name") {
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.skipRow}>
-          <Pressable onPress={() => setStep("mode")}>
-            <ThemedText
-              style={[styles.skipText, { color: colors.textTertiary }]}
-            >
-              Skip
-            </ThemedText>
-          </Pressable>
-        </View>
-        <View style={styles.main}>
-          <ThemedText style={styles.stepTitle}>Your name</ThemedText>
-          <TextInput
-            value={userName}
-            onChangeText={setUserName}
-            placeholder="What should we call you?"
-            placeholderTextColor={colors.muted}
-            style={[
-              styles.nameInput,
-              { color: colors.ink, borderBottomColor: colors.rule },
-            ]}
-            autoFocus
-          />
-        </View>
-        <View style={styles.bottom}>
-          <Button title="Continue" onPress={() => setStep("mode")} size="lg" />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // mode
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <View style={styles.main}>
-        <ThemedText style={styles.stepTitle}>AI mode</ThemedText>
-        <ThemedText style={[styles.stepDesc, { color: colors.textSecondary }]}>
-          Choose how recordings are processed.
-        </ThemedText>
-
-        <View style={styles.modeOptions}>
-          {[
-            {
-              key: "lite" as const,
-              label: "Lite",
-              desc: "Basic transcription, fast.",
-            },
-            {
-              key: "full" as const,
-              label: "Full AI",
-              desc: "Smart extraction. ~500 MB download.",
-            },
-          ].map((opt) => (
-            <Pressable
-              key={opt.key}
-              onPress={() => setSelectedMode(opt.key)}
-              style={[
-                styles.modeOption,
-                {
-                  borderColor:
-                    selectedMode === opt.key ? colors.ink : colors.rule,
-                  borderWidth: selectedMode === opt.key ? 1.5 : 1,
-                },
-              ]}
-            >
-              <ThemedText style={styles.modeLabel}>{opt.label}</ThemedText>
-              <ThemedText
-                style={[styles.modeDesc, { color: colors.textTertiary }]}
-              >
-                {opt.desc}
-              </ThemedText>
-            </Pressable>
-          ))}
+      <View style={styles.content}>
+        <View style={styles.copyBlock}>
+          <ThemedText style={styles.headline}>
+            Your thoughts,{"\n"}organized in seconds
+          </ThemedText>
+          <ThemedText
+            style={[styles.subtitle, { color: colors.textSecondary }]}
+          >
+            Speak for 10 seconds. I'll turn it into{"\n"}notes and action items.
+          </ThemedText>
         </View>
+
+        <View style={styles.micArea}>
+          <Animated.View
+            style={[
+              styles.outerRing,
+              { borderColor: colors.accent + "20" },
+              ringStyle,
+            ]}
+          />
+          <Pressable
+            onPress={handleRecord}
+            style={({ pressed }) => [
+              styles.micButton,
+              { backgroundColor: colors.accent },
+              pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
+            ]}
+            accessibilityLabel="Start recording"
+            accessibilityRole="button"
+          >
+            <MaterialIcons name="mic" size={40} color="#FFFFFF" />
+          </Pressable>
+        </View>
+
+        <ThemedText style={[styles.micPrompt, { color: colors.muted }]}>
+          Say anything — I'll organize it
+        </ThemedText>
       </View>
+
       <View style={styles.bottom}>
-        <Button title="Start using noto" onPress={finish} size="lg" />
+        <Pressable onPress={handleSkip} hitSlop={12}>
+          <ThemedText style={[styles.skipText, { color: colors.textTertiary }]}>
+            I'll explore first
+          </ThemedText>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: Spacing["2xl"] },
-  main: { flex: 1, justifyContent: "center" },
-  bottom: { paddingBottom: Spacing["4xl"] },
-  skipRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    paddingTop: Spacing.lg,
+  container: { flex: 1 },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing["2xl"],
   },
-  skipText: { fontFamily: "Geist_500Medium", fontSize: 14 },
-  wordmark: {
+  copyBlock: {
+    alignSelf: "stretch",
+    marginBottom: Spacing["5xl"],
+  },
+  headline: {
     fontFamily: "Geist_700Bold",
-    fontSize: 48,
-    letterSpacing: -2,
+    fontSize: 32,
+    lineHeight: 36,
+    letterSpacing: -0.5,
   },
-  tagline: {
+  subtitle: {
     fontFamily: "Geist_400Regular",
     fontSize: 16,
-    marginTop: Spacing.sm,
+    lineHeight: 23,
+    marginTop: Spacing.md,
   },
-  featureTitle: {
-    fontFamily: "Geist_600SemiBold",
-    fontSize: 22,
-    marginBottom: Spacing.sm,
+  micArea: {
+    width: 160,
+    height: 160,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.xl,
   },
-  featureDesc: {
+  outerRing: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 2,
+  },
+  micButton: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  micPrompt: {
     fontFamily: "Geist_400Regular",
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: Spacing["3xl"],
+    fontSize: 14,
   },
-  dots: { flexDirection: "row", gap: Spacing.sm },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  stepTitle: {
-    fontFamily: "Geist_600SemiBold",
-    fontSize: 22,
-    marginBottom: Spacing.md,
+  bottom: {
+    alignItems: "center",
+    paddingBottom: Spacing["4xl"],
   },
-  stepDesc: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: Spacing["2xl"],
-  },
-  nameInput: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 18,
-    borderBottomWidth: 1,
-    paddingVertical: Spacing.md,
-  },
-  modeOptions: { gap: Spacing.md, marginTop: Spacing.md },
-  modeOption: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-  },
-  modeLabel: {
-    fontFamily: "Geist_600SemiBold",
-    fontSize: 16,
-    marginBottom: 3,
-  },
-  modeDesc: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 13,
+  skipText: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 14,
   },
 });

@@ -1,16 +1,16 @@
-import { useState, useCallback } from "react";
-import { View, StyleSheet, FlatList, Pressable } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useFocusEffect } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
 import { Chip } from "@/components/ui/chip";
-import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import { Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
 import { useNotes, type Note } from "@/store/app-store";
-import { Spacing, BorderRadius } from "@/constants/theme";
 
 type Filter = "all" | "voice" | "manual";
 
@@ -53,25 +53,34 @@ export default function NotesScreen() {
         onPress={() => router.push(`/note/${item.id}`)}
         style={[styles.noteItem, { borderBottomColor: colors.ruleLight }]}
       >
-        <View style={{ flex: 1 }}>
-          <View style={styles.noteHeader}>
+        <View style={styles.noteContent}>
+          <View style={styles.noteTopRow}>
             <ThemedText style={styles.noteTitle} numberOfLines={1}>
               {item.title || "Untitled"}
             </ThemedText>
+            <ThemedText
+              style={[styles.noteDate, { color: colors.textTertiary }]}
+            >
+              {formatDate(item.updatedAt)}
+            </ThemedText>
+          </View>
+          <View style={styles.noteBottomRow}>
+            <ThemedText
+              style={[styles.notePreview, { color: colors.textSecondary }]}
+              numberOfLines={2}
+            >
+              {item.content || "No content"}
+            </ThemedText>
             {item.source === "voice" && (
-              <MaterialIcons name="mic" size={12} color={colors.accent} />
+              <MaterialIcons
+                name="mic"
+                size={12}
+                color={colors.accent}
+                style={styles.voiceIcon}
+              />
             )}
           </View>
-          <ThemedText
-            style={[styles.notePreview, { color: colors.textSecondary }]}
-            numberOfLines={2}
-          >
-            {item.content || "No content"}
-          </ThemedText>
         </View>
-        <ThemedText style={[styles.noteDate, { color: colors.textTertiary }]}>
-          {formatDate(item.updatedAt)}
-        </ThemedText>
       </Pressable>
     );
   }
@@ -81,6 +90,7 @@ export default function NotesScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top"]}
     >
+      {/* Header */}
       <View style={styles.headerRow}>
         <ThemedText style={styles.screenTitle}>Notes</ThemedText>
         <Pressable onPress={() => router.push("/note/editor")} hitSlop={12}>
@@ -88,15 +98,17 @@ export default function NotesScreen() {
         </Pressable>
       </View>
 
+      {/* Search */}
       <View style={styles.searchRow}>
         <Input
           placeholder="Search"
           value={search}
           onChangeText={setSearch}
-          containerStyle={{ flex: 1 }}
+          containerStyle={styles.searchInput}
         />
       </View>
 
+      {/* Filter chips */}
       <View style={styles.filterRow}>
         {(["all", "voice", "manual"] as Filter[]).map((f) => (
           <Chip
@@ -108,11 +120,15 @@ export default function NotesScreen() {
         ))}
       </View>
 
+      {/* Notes list */}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderNote}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={
+          filtered.length === 0 ? styles.emptyList : styles.list
+        }
+        style={styles.flatList}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState
@@ -151,37 +167,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.sm,
   },
+  searchInput: {
+    width: "100%",
+  },
   filterRow: {
     flexDirection: "row",
     gap: Spacing.sm,
     paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
-  list: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing["3xl"] },
+  flatList: {
+    flex: 1,
+  },
+  list: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing["4xl"],
+  },
+  emptyList: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.xl,
+  },
   noteItem: {
     paddingVertical: Spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    gap: Spacing.lg,
   },
-  noteHeader: {
+  noteContent: {
+    gap: 4,
+  },
+  noteTopRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: 3,
   },
   noteTitle: {
     fontFamily: "Geist_500Medium",
     fontSize: 15,
-  },
-  notePreview: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 13,
-    lineHeight: 18,
+    flex: 1,
+    marginRight: Spacing.md,
   },
   noteDate: {
     fontFamily: "Geist_400Regular",
     fontSize: 12,
     fontVariant: ["tabular-nums"],
+  },
+  noteBottomRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  notePreview: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
+  },
+  voiceIcon: {
+    marginLeft: Spacing.sm,
+    marginTop: 3,
   },
 });
