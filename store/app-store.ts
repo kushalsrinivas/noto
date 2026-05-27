@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 
+import { syncWidgetData } from "@/lib/widget-sync";
+
 const STORAGE_KEYS = {
   ONBOARDING_COMPLETE: "@noto/onboarding_complete",
   NOTES: "@noto/notes",
@@ -136,6 +138,7 @@ export function useNotes() {
       const updated = [newNote, ...notes];
       await saveJson(STORAGE_KEYS.NOTES, updated);
       setNotes(updated);
+      syncWidgetData(updated.length, newNote.title || "Untitled");
       return newNote;
     },
     [notes],
@@ -150,6 +153,11 @@ export function useNotes() {
       );
       await saveJson(STORAGE_KEYS.NOTES, updated);
       setNotes(updated);
+      const latest = updated.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      )[0];
+      syncWidgetData(updated.length, latest?.title || "Untitled");
     },
     [notes],
   );
@@ -159,6 +167,8 @@ export function useNotes() {
       const updated = notes.filter((n) => n.id !== id);
       await saveJson(STORAGE_KEYS.NOTES, updated);
       setNotes(updated);
+      const latest = updated[0];
+      syncWidgetData(updated.length, latest?.title);
     },
     [notes],
   );

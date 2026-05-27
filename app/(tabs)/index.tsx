@@ -178,17 +178,30 @@ export default function HomeScreen() {
               {name || "Welcome back"}
             </ThemedText>
           </View>
-          <Pressable
-            onPress={() => router.push("/search")}
-            hitSlop={12}
-            style={[styles.searchButton, { backgroundColor: colors.paper2 }]}
-          >
-            <MaterialIcons
-              name="search"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => router.push("/search")}
+              hitSlop={12}
+              style={[styles.headerIconBtn, { backgroundColor: colors.paper2 }]}
+            >
+              <MaterialIcons
+                name="search"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/(tabs)/profile")}
+              hitSlop={12}
+              style={[styles.headerIconBtn, { backgroundColor: colors.paper2 }]}
+            >
+              <MaterialIcons
+                name="settings"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          </View>
         </View>
 
         {/* Quick Actions */}
@@ -495,7 +508,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     letterSpacing: -0.5,
   },
-  searchButton: {
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  headerIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,

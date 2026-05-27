@@ -20,10 +20,20 @@ import { useColors } from "@/hooks/use-theme-color";
 
 type RecordingState = "idle" | "recording" | "paused";
 
-// iOS: WAV (16 kHz mono 16-bit PCM) → Whisper reads this directly.
-// Android: M4A (AAC 16 kHz mono) → needs conversion for Whisper.
+const NUM_BARS = 40;
+const MIN_BAR_HEIGHT = 3;
+const MAX_BAR_HEIGHT = 36;
+const METERING_INTERVAL_MS = 80;
+
+function normalizeDb(db: number): number {
+  const floor = -50;
+  const ceiling = -5;
+  const clamped = Math.max(floor, Math.min(ceiling, db));
+  return (clamped - floor) / (ceiling - floor);
+}
+
 const RECORDING_OPTIONS: Audio.RecordingOptions = {
-  isMeteringEnabled: false,
+  isMeteringEnabled: true,
   android: {
     extension: ".m4a",
     outputFormat: Audio.AndroidOutputFormat.MPEG_4,
@@ -64,8 +74,9 @@ export default function RecordScreen() {
   const ring1 = useSharedValue(1);
   const ring2 = useSharedValue(1);
   const waveValues = useRef(
-    Array.from({ length: 24 }, () => useSharedValue(3)),
+    Array.from({ length: NUM_BARS }, () => useSharedValue(MIN_BAR_HEIGHT)),
   ).current;
+  const meteringBuffer = useRef<number[]>(new Array(NUM_BARS).fill(0));
 
   const startPulse = useCallback(() => {
     ring1.value = withRepeat(
@@ -93,28 +104,33 @@ export default function RecordScreen() {
     ring2.value = withTiming(1, { duration: 200 });
   }, [ring1, ring2]);
 
+  const onRecordingStatusUpdate = useCallback(
+    (status: Audio.RecordingStatus) => {
+      if (status.isRecording && status.metering != null) {
+        const level = normalizeDb(status.metering);
+        meteringBuffer.current.shift();
+        meteringBuffer.current.push(level);
+
+        waveValues.forEach((sv, i) => {
+          const val = meteringBuffer.current[i];
+          sv.value = withTiming(
+            MIN_BAR_HEIGHT + val * (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT),
+            { duration: METERING_INTERVAL_MS, easing: Easing.out(Easing.quad) },
+          );
+        });
+      }
+    },
+    [waveValues],
+  );
+
   useEffect(() => {
     if (state === "recording") {
       startPulse();
-      waveValues.forEach((wv) => {
-        wv.value = withRepeat(
-          withSequence(
-            withTiming(3 + Math.random() * 20, {
-              duration: 250 + Math.random() * 350,
-            }),
-            withTiming(3 + Math.random() * 6, {
-              duration: 250 + Math.random() * 350,
-            }),
-          ),
-          -1,
-          true,
-        );
-      });
     } else {
       stopPulse();
       waveValues.forEach((wv) => {
         cancelAnimation(wv);
-        wv.value = withTiming(3, { duration: 200 });
+        wv.value = withTiming(MIN_BAR_HEIGHT, { duration: 200 });
       });
     }
   }, [state]);
@@ -141,8 +157,12 @@ export default function RecordScreen() {
         playsInSilentModeIOS: true,
       });
 
-      const { recording } =
-        await Audio.Recording.createAsync(RECORDING_OPTIONS);
+      meteringBuffer.current = new Array(NUM_BARS).fill(0);
+      const { recording } = await Audio.Recording.createAsync(
+        RECORDING_OPTIONS,
+        onRecordingStatusUpdate,
+        METERING_INTERVAL_MS,
+      );
       recordingRef.current = recording;
       setState("recording");
       setElapsed(0);
@@ -383,12 +403,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    height: 32,
+    height: 48,
     gap: 2,
     marginTop: Spacing["3xl"],
-    paddingHorizontal: Spacing["4xl"],
+    paddingHorizontal: Spacing.xl,
   },
-  waveBar: { width: 2.5, borderRadius: 1.5, minHeight: 3 },
+  waveBar: { width: 2.5, borderRadius: 1.5, minHeight: MIN_BAR_HEIGHT },
   micArea: {
     flex: 1,
     alignItems: "center",
