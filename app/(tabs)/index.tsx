@@ -2,7 +2,13 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LlmDownloadModal } from "@/components/llm-download-modal";
@@ -35,6 +41,66 @@ function formatRelativeTime(dateStr: string) {
   return `${days}d ago`;
 }
 
+function AiStatusBadge({ status }: { status?: string }) {
+  const colors = useColors();
+  if (!status) return null;
+
+  if (status === "processing") {
+    return (
+      <View
+        style={[badgeStyles.badge, { backgroundColor: colors.warning + "18" }]}
+      >
+        <ActivityIndicator size={10} color={colors.warning} />
+        <ThemedText style={[badgeStyles.text, { color: colors.warning }]}>
+          AI processing
+        </ThemedText>
+      </View>
+    );
+  }
+
+  if (status === "done") {
+    return (
+      <View
+        style={[badgeStyles.badge, { backgroundColor: colors.successMuted }]}
+      >
+        <MaterialIcons name="check-circle" size={10} color={colors.success} />
+        <ThemedText style={[badgeStyles.text, { color: colors.success }]}>
+          AI ready
+        </ThemedText>
+      </View>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <View style={[badgeStyles.badge, { backgroundColor: colors.errorMuted }]}>
+        <MaterialIcons name="error-outline" size={10} color={colors.error} />
+        <ThemedText style={[badgeStyles.text, { color: colors.error }]}>
+          AI failed
+        </ThemedText>
+      </View>
+    );
+  }
+
+  return null;
+}
+
+const badgeStyles = StyleSheet.create({
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+    alignSelf: "flex-start",
+  },
+  text: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 10,
+  },
+});
+
 const LLM_PROMPT_KEY = "@noto/llm_download_prompted";
 
 export default function HomeScreen() {
@@ -66,15 +132,25 @@ export default function HomeScreen() {
     setShowLlmModal(false);
   }, []);
 
+  const hasProcessing = notes.some(
+    (n) =>
+      n.transcriptionStatus === "transcribing" || n.aiStatus === "processing",
+  );
+
   useFocusEffect(
     useCallback(() => {
       reloadNotes();
       reloadTasks();
       reloadStats();
-    }, [reloadNotes, reloadTasks, reloadStats]),
+
+      if (!hasProcessing) return;
+      const interval = setInterval(() => reloadNotes(), 3000);
+      return () => clearInterval(interval);
+    }, [reloadNotes, reloadTasks, reloadStats, hasProcessing]),
   );
 
   const pendingTasks = tasks.filter((t) => !t.completed);
+  const completedCount = tasks.filter((t) => t.completed).length;
   const todayTasks = pendingTasks.filter((t) => {
     if (!t.dueDate) return false;
     return new Date(t.dueDate).toDateString() === new Date().toDateString();
@@ -90,22 +166,32 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        {/* Header — left-biased, not centred */}
+        {/* Header */}
         <View style={styles.header}>
-          <ThemedText style={[styles.greeting, { color: colors.textTertiary }]}>
-            {getGreeting()}
-            {name ? `, ${name}` : ""}
-          </ThemedText>
-          <Pressable onPress={() => router.push("/search")} hitSlop={12}>
+          <View>
+            <ThemedText
+              style={[styles.greeting, { color: colors.textTertiary }]}
+            >
+              {getGreeting()}
+            </ThemedText>
+            <ThemedText style={styles.headerName}>
+              {name || "Welcome back"}
+            </ThemedText>
+          </View>
+          <Pressable
+            onPress={() => router.push("/search")}
+            hitSlop={12}
+            style={[styles.searchButton, { backgroundColor: colors.paper2 }]}
+          >
             <MaterialIcons
               name="search"
-              size={22}
+              size={20}
               color={colors.textSecondary}
             />
           </Pressable>
         </View>
 
-        {/* Quick Actions — horizontal, restrained */}
+        {/* Quick Actions */}
         <View style={styles.actionsRow}>
           <Pressable
             onPress={() => router.push("/voice/record")}
@@ -134,6 +220,47 @@ export default function HomeScreen() {
               Add task
             </ThemedText>
           </Pressable>
+        </View>
+
+        {/* Stats */}
+        <View
+          style={[
+            styles.statsRow,
+            { backgroundColor: colors.paper2, borderColor: colors.rule },
+          ]}
+        >
+          <View style={styles.stat}>
+            <ThemedText style={styles.statNum}>
+              {pendingTasks.length}
+            </ThemedText>
+            <ThemedText
+              style={[styles.statLabel, { color: colors.textTertiary }]}
+            >
+              open
+            </ThemedText>
+          </View>
+          <View
+            style={[styles.statDivider, { backgroundColor: colors.rule }]}
+          />
+          <View style={styles.stat}>
+            <ThemedText style={styles.statNum}>{completedCount}</ThemedText>
+            <ThemedText
+              style={[styles.statLabel, { color: colors.textTertiary }]}
+            >
+              done
+            </ThemedText>
+          </View>
+          <View
+            style={[styles.statDivider, { backgroundColor: colors.rule }]}
+          />
+          <View style={styles.stat}>
+            <ThemedText style={styles.statNum}>{notes.length}</ThemedText>
+            <ThemedText
+              style={[styles.statLabel, { color: colors.textTertiary }]}
+            >
+              notes
+            </ThemedText>
+          </View>
         </View>
 
         {/* Today's tasks */}
@@ -181,45 +308,42 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Stats — restrained, no coloured fills */}
-        <View style={[styles.statsRow, { borderColor: colors.rule }]}>
-          <View style={styles.stat}>
-            <ThemedText style={styles.statNum}>
-              {pendingTasks.length}
-            </ThemedText>
-            <ThemedText
-              style={[styles.statLabel, { color: colors.textTertiary }]}
+        {/* Chat entry point */}
+        {notes.length > 0 && (
+          <Pressable
+            onPress={() => router.push("/chat")}
+            style={[
+              styles.chatCard,
+              { borderColor: colors.rule, backgroundColor: colors.paper2 },
+            ]}
+          >
+            <View
+              style={[
+                styles.chatIconWrap,
+                { backgroundColor: colors.accentMuted },
+              ]}
             >
-              open
-            </ThemedText>
-          </View>
-          <View
-            style={[styles.statDivider, { backgroundColor: colors.rule }]}
-          />
-          <View style={styles.stat}>
-            <ThemedText style={styles.statNum}>
-              {tasks.filter((t) => t.completed).length}
-            </ThemedText>
-            <ThemedText
-              style={[styles.statLabel, { color: colors.textTertiary }]}
-            >
-              done
-            </ThemedText>
-          </View>
-          <View
-            style={[styles.statDivider, { backgroundColor: colors.rule }]}
-          />
-          <View style={styles.stat}>
-            <ThemedText style={styles.statNum}>{notes.length}</ThemedText>
-            <ThemedText
-              style={[styles.statLabel, { color: colors.textTertiary }]}
-            >
-              notes
-            </ThemedText>
-          </View>
-        </View>
+              <MaterialIcons name="chat" size={20} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.chatTitle}>
+                Chat with your notes
+              </ThemedText>
+              <ThemedText
+                style={[styles.chatDesc, { color: colors.textSecondary }]}
+              >
+                Ask questions about anything you've captured
+              </ThemedText>
+            </View>
+            <MaterialIcons
+              name="arrow-forward"
+              size={16}
+              color={colors.textTertiary}
+            />
+          </Pressable>
+        )}
 
-        {/* Investment signal — show after first recording */}
+        {/* Nudges */}
         {stats.totalRecordings > 0 && stats.totalRecordings < 3 && (
           <View style={styles.nudgeBlock}>
             <ThemedText
@@ -232,7 +356,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Upgrade nudge — appears after 3+ recordings */}
         {stats.totalRecordings >= 3 && (
           <Pressable
             onPress={() => router.push("/upgrade")}
@@ -259,7 +382,7 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-        {/* Recent notes */}
+        {/* Recent notes — card layout */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <ThemedText
@@ -286,41 +409,56 @@ export default function HomeScreen() {
               </ThemedText>
             </View>
           ) : (
-            recentNotes.map((note) => (
-              <Pressable
-                key={note.id}
-                onPress={() => router.push(`/note/${note.id}`)}
-                style={[
-                  styles.noteItem,
-                  { borderBottomColor: colors.ruleLight },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <ThemedText style={styles.noteTitle} numberOfLines={1}>
-                    {note.title || "Untitled"}
-                  </ThemedText>
+            <View style={styles.noteCardsGrid}>
+              {recentNotes.map((note) => (
+                <Pressable
+                  key={note.id}
+                  onPress={() => router.push(`/note/${note.id}`)}
+                  style={[
+                    styles.noteCard,
+                    {
+                      borderColor: colors.ruleLight,
+                      backgroundColor: colors.paper2,
+                    },
+                  ]}
+                >
+                  <View style={styles.noteCardTop}>
+                    <ThemedText style={styles.noteCardTitle} numberOfLines={1}>
+                      {note.title || "Untitled"}
+                    </ThemedText>
+                    {note.source === "voice" && (
+                      <MaterialIcons
+                        name="mic"
+                        size={12}
+                        color={colors.accent}
+                      />
+                    )}
+                  </View>
                   <ThemedText
                     style={[
-                      styles.notePreview,
+                      styles.noteCardPreview,
                       { color: colors.textSecondary },
                     ]}
-                    numberOfLines={1}
+                    numberOfLines={2}
                   >
-                    {note.content}
+                    {note.transcriptionStatus === "transcribing"
+                      ? "Transcribing..."
+                      : note.content || "No content"}
                   </ThemedText>
-                </View>
-                <View style={styles.noteMeta}>
-                  {note.source === "voice" && (
-                    <MaterialIcons name="mic" size={12} color={colors.accent} />
-                  )}
-                  <ThemedText
-                    style={[styles.noteTime, { color: colors.textTertiary }]}
-                  >
-                    {formatRelativeTime(note.updatedAt)}
-                  </ThemedText>
-                </View>
-              </Pressable>
-            ))
+                  <View style={styles.noteCardBottom}>
+                    <ThemedText
+                      style={[
+                        styles.noteCardTime,
+                        { color: colors.textTertiary },
+                      ]}
+                    >
+                      {formatRelativeTime(note.updatedAt)}
+                    </ThemedText>
+                    <AiStatusBadge status={note.aiStatus} />
+                  </View>
+                </Pressable>
+              ))}
+            </View>
           )}
         </View>
 
@@ -344,17 +482,30 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingTop: Spacing["2xl"],
-    paddingBottom: Spacing["3xl"],
+    paddingBottom: Spacing["2xl"],
   },
   greeting: {
     fontFamily: "Geist_400Regular",
-    fontSize: 15,
+    fontSize: 14,
     letterSpacing: 0.1,
+    marginBottom: 2,
+  },
+  headerName: {
+    fontFamily: "Geist_700Bold",
+    fontSize: 24,
+    letterSpacing: -0.5,
+  },
+  searchButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionsRow: {
     flexDirection: "row",
     gap: Spacing.sm,
-    marginBottom: Spacing["3xl"],
+    marginBottom: Spacing["2xl"],
   },
   primaryAction: {
     flexDirection: "row",
@@ -379,8 +530,30 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_500Medium",
     fontSize: 14,
   },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.lg,
+    marginBottom: Spacing["2xl"],
+  },
+  stat: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statNum: {
+    fontFamily: "Geist_600SemiBold",
+    fontSize: 22,
+    fontVariant: ["tabular-nums"],
+  },
+  statLabel: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 11,
+    marginTop: 1,
+  },
+  statDivider: { width: StyleSheet.hairlineWidth, height: 24 },
   section: {
-    marginBottom: Spacing["3xl"],
+    marginBottom: Spacing["2xl"],
   },
   sectionHeader: {
     flexDirection: "row",
@@ -418,63 +591,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     flex: 1,
   },
-  statsRow: {
+  chatCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
+    padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.xl,
-    marginBottom: Spacing["3xl"],
+    borderWidth: 1,
+    marginBottom: Spacing["2xl"],
+    gap: Spacing.md,
   },
-  stat: {
-    flex: 1,
+  chatIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
+    justifyContent: "center",
   },
-  statNum: {
+  chatTitle: {
     fontFamily: "Geist_600SemiBold",
-    fontSize: 24,
-    fontVariant: ["tabular-nums"],
-  },
-  statLabel: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  statDivider: { width: StyleSheet.hairlineWidth, height: 28 },
-  emptyBlock: {
-    paddingVertical: Spacing["2xl"],
-  },
-  emptyText: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 14,
-  },
-  noteItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.lg,
-  },
-  noteTitle: {
-    fontFamily: "Geist_500Medium",
     fontSize: 15,
     marginBottom: 2,
   },
-  notePreview: {
+  chatDesc: {
     fontFamily: "Geist_400Regular",
     fontSize: 13,
-  },
-  noteMeta: {
-    alignItems: "flex-end",
-    gap: 3,
-  },
-  noteTime: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 11,
-    fontVariant: ["tabular-nums"],
+    lineHeight: 18,
   },
   nudgeBlock: {
-    marginBottom: Spacing["3xl"],
+    marginBottom: Spacing["2xl"],
   },
   nudgeText: {
     fontFamily: "Geist_400Regular",
@@ -486,7 +630,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    marginBottom: Spacing["3xl"],
+    marginBottom: Spacing["2xl"],
     gap: Spacing.md,
   },
   upgradeTitle: {
@@ -498,5 +642,48 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_400Regular",
     fontSize: 13,
     lineHeight: 18,
+  },
+  emptyBlock: {
+    paddingVertical: Spacing["2xl"],
+  },
+  emptyText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 14,
+  },
+  noteCardsGrid: {
+    gap: Spacing.md,
+  },
+  noteCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    gap: Spacing.sm,
+  },
+  noteCardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  noteCardTitle: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 15,
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  noteCardPreview: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  noteCardBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  noteCardTime: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 11,
+    fontVariant: ["tabular-nums"],
   },
 });

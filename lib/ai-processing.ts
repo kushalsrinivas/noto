@@ -1,5 +1,6 @@
 import type { Note, Task } from "@/store/app-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { embedNote } from "./embeddings";
 import {
     analyzeTranscript,
     isLlmModelDownloaded,
@@ -79,6 +80,10 @@ export async function processTranscriptionWithLlm(
         JSON.stringify([...newTasks, ...tasks]),
       );
     }
+
+    embedNote(noteId, note.content).catch((err) =>
+      console.warn("Embedding generation failed (non-blocking):", err),
+    );
   } catch (err) {
     console.warn("LLM analysis failed:", err);
 

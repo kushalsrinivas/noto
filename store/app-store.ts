@@ -80,7 +80,12 @@ export function useOnboarding() {
     setComplete(true);
   }, []);
 
-  return { complete, markComplete };
+  const resetOnboarding = useCallback(async () => {
+    await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "false");
+    setComplete(false);
+  }, []);
+
+  return { complete, markComplete, resetOnboarding };
 }
 
 export function useUserName() {
@@ -357,4 +362,13 @@ export function useAiMode() {
   }, []);
 
   return { mode, setMode };
+}
+
+export async function clearAllUserData(): Promise<void> {
+  const keys = Object.values(STORAGE_KEYS);
+  await AsyncStorage.multiRemove([
+    ...keys,
+    "@noto/llm_download_prompted",
+    "@noto/embeddings",
+  ]);
 }

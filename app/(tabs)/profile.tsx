@@ -1,12 +1,29 @@
-import { View, StyleSheet, ScrollView, Pressable, Switch } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router } from "expo-router";
+import { useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
+import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
-import { useUserName, useAiMode, useNotes, useTasks } from "@/store/app-store";
-import { Spacing, BorderRadius } from "@/constants/theme";
-import { useState } from "react";
+import { releaseContext } from "@/lib/llama";
+import {
+  clearAllUserData,
+  useAiMode,
+  useNotes,
+  useOnboarding,
+  useRecordings,
+  useTasks,
+  useUserName,
+} from "@/store/app-store";
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -14,7 +31,66 @@ export default function ProfileScreen() {
   const { mode, setMode } = useAiMode();
   const { notes } = useNotes();
   const { tasks } = useTasks();
+  const { recordings } = useRecordings();
+  const { resetOnboarding } = useOnboarding();
   const [notifications, setNotifications] = useState(true);
+
+  function handleManageRecordings() {
+    Alert.alert(
+      "Recordings",
+      `You have ${recordings.length} recording${recordings.length !== 1 ? "s" : ""} stored on this device.`,
+      [{ text: "OK" }],
+    );
+  }
+
+  async function handleClearCache() {
+    Alert.alert(
+      "Clear cache",
+      "This will release the AI model from memory. It will be reloaded when needed.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          onPress: async () => {
+            try {
+              await releaseContext();
+              Alert.alert("Done", "Cache cleared successfully.");
+            } catch {
+              Alert.alert("Error", "Failed to clear cache.");
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  async function handleRestartOnboarding() {
+    await resetOnboarding();
+    router.replace("/onboarding");
+  }
+
+  function handleDeleteAllData() {
+    Alert.alert(
+      "Delete all data",
+      "This will permanently delete all your notes, tasks, recordings, and settings. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete everything",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await releaseContext();
+            } catch {
+              // ignore
+            }
+            await clearAllUserData();
+            router.replace("/onboarding");
+          },
+        },
+      ],
+    );
+  }
 
   const sections = [
     {
@@ -31,8 +107,23 @@ export default function ProfileScreen() {
     {
       title: "PREFERENCES",
       items: [
-        { icon: "translate" as const, label: "Language", value: "English" },
-        { icon: "mic" as const, label: "Recording quality", value: "High" },
+        {
+          icon: "translate" as const,
+          label: "Language",
+          value: "English",
+          onPress: () =>
+            Alert.alert("Language", "Only English is currently supported."),
+        },
+        {
+          icon: "mic" as const,
+          label: "Recording quality",
+          value: "High",
+          onPress: () =>
+            Alert.alert(
+              "Recording quality",
+              "Audio is recorded at 16 kHz for optimal transcription accuracy.",
+            ),
+        },
       ],
     },
     {
@@ -50,8 +141,21 @@ export default function ProfileScreen() {
     {
       title: "DATA",
       items: [
-        { icon: "folder-open" as const, label: "Manage recordings" },
-        { icon: "delete-outline" as const, label: "Clear cache" },
+        {
+          icon: "folder-open" as const,
+          label: "Manage recordings",
+          onPress: handleManageRecordings,
+        },
+        {
+          icon: "delete-outline" as const,
+          label: "Clear cache",
+          onPress: handleClearCache,
+        },
+        {
+          icon: "replay" as const,
+          label: "Restart onboarding",
+          onPress: handleRestartOnboarding,
+        },
       ],
     },
   ];
@@ -152,6 +256,17 @@ export default function ProfileScreen() {
           </View>
         ))}
 
+        {/* Delete all data */}
+        <Pressable
+          onPress={handleDeleteAllData}
+          style={[styles.dangerButton, { borderColor: colors.error + "40" }]}
+        >
+          <MaterialIcons name="warning" size={18} color={colors.error} />
+          <ThemedText style={[styles.dangerLabel, { color: colors.error }]}>
+            Delete all user data
+          </ThemedText>
+        </Pressable>
+
         <ThemedText style={[styles.version, { color: colors.textTertiary }]}>
           noto v1.0.0
         </ThemedText>
@@ -231,10 +346,24 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_400Regular",
     fontSize: 13,
   },
+  dangerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginTop: Spacing.md,
+  },
+  dangerLabel: {
+    fontFamily: "Geist_600SemiBold",
+    fontSize: 15,
+  },
   version: {
     fontFamily: "Geist_400Regular",
     textAlign: "center",
     fontSize: 12,
-    marginTop: Spacing.xl,
+    marginTop: Spacing["2xl"],
   },
 });

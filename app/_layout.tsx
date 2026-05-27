@@ -102,6 +102,7 @@ export default function RootLayout() {
           name="voice/review"
           options={{ headerShown: true, title: "", presentation: "modal" }}
         />
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen
           name="search"
           options={{ headerShown: false, presentation: "modal" }}

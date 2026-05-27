@@ -1,14 +1,20 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { Spacing } from "@/constants/theme";
+import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
 import { useNotes, type Note } from "@/store/app-store";
 
@@ -29,18 +35,19 @@ export default function NotesScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
 
-  const hasTranscribing = notes.some(
-    (n) => n.transcriptionStatus === "transcribing",
+  const hasProcessing = notes.some(
+    (n) =>
+      n.transcriptionStatus === "transcribing" || n.aiStatus === "processing",
   );
 
   useFocusEffect(
     useCallback(() => {
       reload();
 
-      if (!hasTranscribing) return;
+      if (!hasProcessing) return;
       const interval = setInterval(() => reload(), 3000);
       return () => clearInterval(interval);
-    }, [reload, hasTranscribing]),
+    }, [reload, hasProcessing]),
   );
 
   const filtered = notes.filter((n) => {
@@ -105,6 +112,37 @@ export default function NotesScreen() {
               />
             )}
           </View>
+          {item.aiStatus === "processing" && (
+            <View
+              style={[
+                styles.aiBadge,
+                { backgroundColor: colors.warning + "18" },
+              ]}
+            >
+              <ActivityIndicator size={10} color={colors.warning} />
+              <ThemedText
+                style={[styles.aiBadgeText, { color: colors.warning }]}
+              >
+                AI processing
+              </ThemedText>
+            </View>
+          )}
+          {item.aiStatus === "done" && (
+            <View
+              style={[styles.aiBadge, { backgroundColor: colors.successMuted }]}
+            >
+              <MaterialIcons
+                name="check-circle"
+                size={10}
+                color={colors.success}
+              />
+              <ThemedText
+                style={[styles.aiBadgeText, { color: colors.success }]}
+              >
+                AI ready
+              </ThemedText>
+            </View>
+          )}
         </View>
       </Pressable>
     );
@@ -258,5 +296,19 @@ const styles = StyleSheet.create({
   transcribingText: {
     fontFamily: "Geist_500Medium",
     fontSize: 13,
+  },
+  aiBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  aiBadgeText: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 10,
   },
 });
