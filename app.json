@@ -15,7 +15,8 @@
         "com.apple.security.application-groups": ["group.com.kushalbhai.noto"]
       },
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {

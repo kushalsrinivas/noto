@@ -17,6 +17,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
+import {
+  dismissRecordingNotification,
+  registerActionHandler,
+  requestNotificationPermission,
+  showRecordingNotification,
+  unregisterActionHandler,
+} from "@/lib/recording-notification";
 
 type RecordingState = "idle" | "recording" | "paused";
 
@@ -155,6 +162,7 @@ export default function RecordScreen() {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
       });
 
       meteringBuffer.current = new Array(NUM_BARS).fill(0);
@@ -167,6 +175,9 @@ export default function RecordScreen() {
       setState("recording");
       setElapsed(0);
       timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+
+      await requestNotificationPermission();
+      showRecordingNotification("recording");
     } catch (err) {
       Alert.alert("Error", "Failed to start recording. Please try again.");
     }
@@ -177,6 +188,7 @@ export default function RecordScreen() {
       await recordingRef.current?.pauseAsync();
       setState("paused");
       if (timerRef.current) clearInterval(timerRef.current);
+      showRecordingNotification("paused");
     } catch {
       // Some devices don't support pause — just keep recording
     }
@@ -187,6 +199,7 @@ export default function RecordScreen() {
       await recordingRef.current?.startAsync();
       setState("recording");
       timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+      showRecordingNotification("recording");
     } catch {
       Alert.alert("Error", "Could not resume recording.");
     }
@@ -198,9 +211,13 @@ export default function RecordScreen() {
     try {
       if (timerRef.current) clearInterval(timerRef.current);
       setState("idle");
+      dismissRecordingNotification();
 
       await recordingRef.current.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        staysActiveInBackground: false,
+      });
 
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
@@ -219,10 +236,14 @@ export default function RecordScreen() {
   }
 
   async function cancel() {
+    dismissRecordingNotification();
     if (recordingRef.current) {
       try {
         await recordingRef.current.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: false,
+        });
       } catch {}
       recordingRef.current = null;
     }
@@ -231,8 +252,28 @@ export default function RecordScreen() {
     router.back();
   }
 
+  // Register notification action handler so lock-screen controls work
+  const actionsRef = useRef({ pauseRecording, resumeRecording, stopRecording });
+  actionsRef.current = { pauseRecording, resumeRecording, stopRecording };
+
   useEffect(() => {
+    registerActionHandler((action) => {
+      switch (action) {
+        case "pause":
+          actionsRef.current.pauseRecording();
+          break;
+        case "resume":
+          actionsRef.current.resumeRecording();
+          break;
+        case "stop":
+          actionsRef.current.stopRecording();
+          break;
+      }
+    });
+
     return () => {
+      unregisterActionHandler();
+      dismissRecordingNotification();
       if (timerRef.current) clearInterval(timerRef.current);
       if (recordingRef.current) {
         recordingRef.current.stopAndUnloadAsync().catch(() => {});

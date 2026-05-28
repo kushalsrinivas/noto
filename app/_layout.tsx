@@ -18,6 +18,7 @@ import "react-native-reanimated";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { setupRecordingNotifications } from "@/lib/recording-notification";
 import { useOnboarding } from "@/store/app-store";
 
 SplashScreen.preventAutoHideAsync();
@@ -66,6 +67,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (ready) {
       SplashScreen.hideAsync();
+      setupRecordingNotifications();
     }
   }, [ready]);
 
