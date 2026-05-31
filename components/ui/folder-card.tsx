@@ -1,10 +1,17 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Pressable, StyleSheet, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { ThemedText } from "@/components/themed-text";
 import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
 import type { Folder } from "@/store/folder-store";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Props = {
   folder: Folder;
@@ -15,15 +22,22 @@ type Props = {
 
 export function FolderCard({ folder, onPress, onLongPress, compact }: Props) {
   const colors = useColors();
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.get() }],
+  }));
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       onLongPress={onLongPress}
+      onPressIn={() => scale.set(withTiming(0.96, { duration: 100 }))}
+      onPressOut={() => scale.set(withTiming(1, { duration: 200 }))}
       style={[
         styles.card,
         compact && styles.cardCompact,
         { borderColor: colors.ruleLight, backgroundColor: colors.paper2 },
+        animStyle,
       ]}
     >
       <View style={[styles.iconWrap, { backgroundColor: folder.color + "18" }]}>
@@ -75,7 +89,7 @@ export function FolderCard({ folder, onPress, onLongPress, compact }: Props) {
           </ThemedText>
         )}
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -86,6 +100,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
+    borderCurve: "continuous",
     borderWidth: 1,
     minWidth: 140,
   },
@@ -98,6 +113,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: BorderRadius.md,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },

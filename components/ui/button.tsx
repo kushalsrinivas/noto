@@ -1,12 +1,19 @@
+import { ThemedText } from "@/components/themed-text";
+import { BorderRadius, Spacing } from "@/constants/theme";
+import { useColors } from "@/hooks/use-theme-color";
 import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
-  ActivityIndicator,
   type ViewStyle,
 } from "react-native";
-import { ThemedText } from "@/components/themed-text";
-import { useColors } from "@/hooks/use-theme-color";
-import { BorderRadius, Spacing } from "@/constants/theme";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
@@ -61,20 +68,29 @@ export function Button({
     lg: { paddingVertical: 14, paddingHorizontal: Spacing["2xl"] },
   };
 
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.get() }],
+  }));
+
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={() => scale.set(withTiming(0.96, { duration: 100 }))}
+      onPressOut={() => scale.set(withTiming(1, { duration: 200 }))}
       disabled={disabled || loading}
-      style={({ pressed }) => [
+      style={[
         styles.base,
         sizeStyles[size],
         { backgroundColor: bgMap[variant] },
-        borderMap[variant] && {
-          borderWidth: 1,
-          borderColor: borderMap[variant],
-        },
-        pressed && { opacity: 0.85 },
+        borderMap[variant]
+          ? {
+              borderWidth: 1,
+              borderColor: borderMap[variant],
+            }
+          : undefined,
         (disabled || loading) && { opacity: 0.4 },
+        animatedStyle,
         style,
       ]}
       accessibilityRole="button"
@@ -95,7 +111,7 @@ export function Button({
           </ThemedText>
         </>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -105,6 +121,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: BorderRadius.pill,
+    borderCurve: "continuous",
   },
   text: {
     fontFamily: "Geist_600SemiBold",

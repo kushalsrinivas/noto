@@ -375,6 +375,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: BorderRadius.lg,
+    borderCurve: "continuous",
     borderWidth: 1,
     borderStyle: "dashed",
     alignItems: "center",
@@ -411,6 +412,7 @@ const styles = StyleSheet.create({
   noteItem: {
     paddingVertical: Spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderCurve: "continuous",
   },
   noteContent: {
     gap: 4,

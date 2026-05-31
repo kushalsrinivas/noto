@@ -111,11 +111,13 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   voiceButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -8,
+    marginTop: -10,
+    boxShadow: "0 2px 8px rgba(232, 89, 12, 0.35)",
   },
 });

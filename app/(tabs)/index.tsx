@@ -4,11 +4,17 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LlmDownloadModal } from "@/components/llm-download-modal";
@@ -17,12 +23,18 @@ import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
 import { isLlmModelDownloaded, isLlmSupported } from "@/lib/llama";
 import {
+  type Note,
   useNotes,
   useTasks,
   useUsageStats,
   useUserName,
 } from "@/store/app-store";
 import { STORAGE_KEYS } from "@/store/storage-keys";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const CARD_GAP = Spacing.md;
+const CARD_WIDTH = (SCREEN_WIDTH - Spacing.xl * 2 - CARD_GAP) / 2;
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -101,6 +113,61 @@ const badgeStyles = StyleSheet.create({
     fontSize: 10,
   },
 });
+
+function NoteCard({
+  note,
+  colors,
+}: {
+  note: Note;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.get() }],
+  }));
+
+  return (
+    <AnimatedPressable
+      onPress={() => router.push(`/note/${note.id}`)}
+      onPressIn={() => scale.set(withTiming(0.96, { duration: 100 }))}
+      onPressOut={() => scale.set(withTiming(1, { duration: 200 }))}
+      style={[
+        styles.noteCard,
+        {
+          borderColor: colors.ruleLight,
+          backgroundColor: colors.paper2,
+          width: CARD_WIDTH,
+        },
+        animStyle,
+      ]}
+    >
+      <View style={styles.noteCardTop}>
+        <ThemedText style={styles.noteCardTitle} numberOfLines={1}>
+          {note.title || "Untitled"}
+        </ThemedText>
+        {note.source === "voice" ? (
+          <MaterialIcons name="mic" size={12} color={colors.accent} />
+        ) : null}
+      </View>
+      <ThemedText
+        style={[styles.noteCardPreview, { color: colors.textSecondary }]}
+        numberOfLines={2}
+      >
+        {note.transcriptionStatus === "transcribing"
+          ? "Transcribing..."
+          : note.content || "No content"}
+      </ThemedText>
+      <View style={styles.noteCardBottom}>
+        <ThemedText
+          style={[styles.noteCardTime, { color: colors.textTertiary }]}
+        >
+          {formatRelativeTime(note.updatedAt)}
+        </ThemedText>
+        <AiStatusBadge status={note.aiStatus} />
+      </View>
+    </AnimatedPressable>
+  );
+}
 
 const LLM_PROMPT_KEY = STORAGE_KEYS.LLM_DOWNLOAD_PROMPTED;
 
@@ -553,52 +620,7 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.noteCardsGrid}>
               {recentNotes.map((note) => (
-                <Pressable
-                  key={note.id}
-                  onPress={() => router.push(`/note/${note.id}`)}
-                  style={[
-                    styles.noteCard,
-                    {
-                      borderColor: colors.ruleLight,
-                      backgroundColor: colors.paper2,
-                    },
-                  ]}
-                >
-                  <View style={styles.noteCardTop}>
-                    <ThemedText style={styles.noteCardTitle} numberOfLines={1}>
-                      {note.title || "Untitled"}
-                    </ThemedText>
-                    {note.source === "voice" && (
-                      <MaterialIcons
-                        name="mic"
-                        size={12}
-                        color={colors.accent}
-                      />
-                    )}
-                  </View>
-                  <ThemedText
-                    style={[
-                      styles.noteCardPreview,
-                      { color: colors.textSecondary },
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {note.transcriptionStatus === "transcribing"
-                      ? "Transcribing..."
-                      : note.content || "No content"}
-                  </ThemedText>
-                  <View style={styles.noteCardBottom}>
-                    <ThemedText
-                      style={[
-                        styles.noteCardTime,
-                        { color: colors.textTertiary },
-                      ]}
-                    >
-                      {formatRelativeTime(note.updatedAt)}
-                    </ThemedText>
-                    <AiStatusBadge status={note.aiStatus} />
-                  </View>
-                </Pressable>
+                <NoteCard key={note.id} note={note} colors={colors} />
               ))}
             </View>
           )}
@@ -646,6 +668,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -661,6 +684,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.pill,
+    borderCurve: "continuous",
   },
   primaryActionLabel: {
     color: "#FFFFFF",
@@ -671,6 +695,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.pill,
+    borderCurve: "continuous",
     borderWidth: 1,
   },
   secondaryActionLabel: {
@@ -681,6 +706,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderRadius: BorderRadius.lg,
+    borderCurve: "continuous",
     paddingVertical: Spacing.lg,
     marginBottom: Spacing["2xl"],
   },
@@ -743,6 +769,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
+    borderCurve: "continuous",
     borderWidth: 1,
     marginBottom: Spacing["2xl"],
     gap: Spacing.md,
@@ -776,6 +803,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
+    borderCurve: "continuous",
     borderWidth: 1,
     marginBottom: Spacing["2xl"],
     gap: Spacing.md,
@@ -807,6 +835,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.lg,
+    borderCurve: "continuous",
     gap: 2,
     minWidth: 36,
   },
@@ -831,11 +860,14 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   noteCardsGrid: {
-    gap: Spacing.md,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: CARD_GAP,
   },
   noteCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
+    borderCurve: "continuous",
     borderWidth: 1,
     gap: Spacing.sm,
   },

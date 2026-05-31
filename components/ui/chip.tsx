@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet, type ViewStyle } from "react-native";
 import { ThemedText } from "@/components/themed-text";
-import { useColors } from "@/hooks/use-theme-color";
 import { BorderRadius, Spacing } from "@/constants/theme";
+import { useColors } from "@/hooks/use-theme-color";
+import { Pressable, StyleSheet, type ViewStyle } from "react-native";
 
 type Props = {
   label: string;
@@ -42,6 +42,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs + 2,
     borderRadius: BorderRadius.pill,
+    borderCurve: "continuous",
     borderWidth: 1,
   },
   label: {
