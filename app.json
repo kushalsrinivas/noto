@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "noto",
+    "name": "Haven AI",
     "slug": "noto",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "noto",
@@ -52,11 +52,11 @@
       [
         "llama.rn",
         {
-          "enableEntitlements": true,
-          "entitlementsProfile": "production"
+          "enableEntitlements": false
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

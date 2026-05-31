@@ -22,6 +22,7 @@ import {
   useUsageStats,
   useUserName,
 } from "@/store/app-store";
+import { STORAGE_KEYS } from "@/store/storage-keys";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -101,7 +102,7 @@ const badgeStyles = StyleSheet.create({
   },
 });
 
-const LLM_PROMPT_KEY = "@noto/llm_download_prompted";
+const LLM_PROMPT_KEY = STORAGE_KEYS.LLM_DOWNLOAD_PROMPTED;
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -151,11 +152,37 @@ export default function HomeScreen() {
 
   const pendingTasks = tasks.filter((t) => !t.completed);
   const completedCount = tasks.filter((t) => t.completed).length;
+  const todayStr = new Date().toDateString();
   const todayTasks = pendingTasks.filter((t) => {
-    if (!t.dueDate) return false;
-    return new Date(t.dueDate).toDateString() === new Date().toDateString();
+    if (t.dueDate && new Date(t.dueDate).toDateString() === todayStr)
+      return true;
+    if (t.reminderAt && new Date(t.reminderAt).toDateString() === todayStr)
+      return true;
+    return false;
   });
+  const upcomingReminders = pendingTasks
+    .filter((t) => {
+      if (!t.reminderAt) return false;
+      const d = new Date(t.reminderAt);
+      return d.toDateString() !== todayStr && d.getTime() > Date.now();
+    })
+    .sort(
+      (a, b) =>
+        new Date(a.reminderAt!).getTime() - new Date(b.reminderAt!).getTime(),
+    )
+    .slice(0, 3);
   const recentNotes = notes.slice(0, 4);
+
+  const weekDays = (() => {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - today.getDay());
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  })();
 
   return (
     <SafeAreaView
@@ -275,6 +302,108 @@ export default function HomeScreen() {
             </ThemedText>
           </View>
         </View>
+
+        {/* Week strip */}
+        <View style={styles.weekStripRow}>
+          {weekDays.map((d) => {
+            const isToday = d.toDateString() === todayStr;
+            const hasTasks = pendingTasks.some((t) => {
+              const date = t.dueDate || t.reminderAt;
+              return date && new Date(date).toDateString() === d.toDateString();
+            });
+            return (
+              <Pressable
+                key={d.toISOString()}
+                onPress={() => router.push("/(tabs)/calendar")}
+                style={[
+                  styles.weekStripDay,
+                  isToday && { backgroundColor: colors.ink },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    styles.weekStripLabel,
+                    {
+                      color: isToday ? colors.background : colors.textTertiary,
+                    },
+                  ]}
+                >
+                  {d.toLocaleDateString([], { weekday: "narrow" })}
+                </ThemedText>
+                <ThemedText
+                  style={[
+                    styles.weekStripNum,
+                    {
+                      color: isToday ? colors.background : colors.ink,
+                    },
+                  ]}
+                >
+                  {d.getDate()}
+                </ThemedText>
+                {hasTasks && (
+                  <View
+                    style={[
+                      styles.weekStripDot,
+                      {
+                        backgroundColor: isToday
+                          ? colors.background
+                          : colors.accent,
+                      },
+                    ]}
+                  />
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Upcoming reminders */}
+        {upcomingReminders.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <ThemedText
+                style={[styles.sectionLabel, { color: colors.textTertiary }]}
+              >
+                UPCOMING REMINDERS
+              </ThemedText>
+            </View>
+            {upcomingReminders.map((task) => (
+              <Pressable
+                key={task.id}
+                onPress={() => router.push(`/task/${task.id}`)}
+                style={[
+                  styles.taskItem,
+                  { borderBottomColor: colors.ruleLight },
+                ]}
+              >
+                <MaterialIcons
+                  name="notifications-none"
+                  size={14}
+                  color={colors.accent}
+                />
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.taskText} numberOfLines={1}>
+                    {task.title}
+                  </ThemedText>
+                  <ThemedText
+                    style={[
+                      styles.reminderMeta,
+                      { color: colors.textTertiary },
+                    ]}
+                  >
+                    {new Date(task.reminderAt!).toLocaleString([], {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {/* Today's tasks */}
         {todayTasks.length > 0 && (
@@ -667,6 +796,39 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: "Geist_400Regular",
     fontSize: 14,
+  },
+  weekStripRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: Spacing["2xl"],
+  },
+  weekStripDay: {
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.lg,
+    gap: 2,
+    minWidth: 36,
+  },
+  weekStripLabel: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+  weekStripNum: {
+    fontFamily: "Geist_600SemiBold",
+    fontSize: 15,
+    fontVariant: ["tabular-nums"],
+  },
+  weekStripDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  reminderMeta: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 11,
+    marginTop: 1,
   },
   noteCardsGrid: {
     gap: Spacing.md,

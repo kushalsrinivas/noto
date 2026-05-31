@@ -42,7 +42,7 @@ struct NotoWidgetSmallView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(Color("AccentColor"))
                 Spacer()
-                Text("noto")
+                Text("Haven AI")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
             }

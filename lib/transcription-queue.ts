@@ -1,10 +1,11 @@
 import type { Note, Recording } from "@/store/app-store";
+import { STORAGE_KEYS } from "@/store/storage-keys";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { processTranscriptionWithLlm } from "./ai-processing";
 import { ensureModel, transcribe as whisperTranscribe } from "./whisper";
 
-const NOTES_KEY = "@noto/notes";
-const RECORDINGS_KEY = "@noto/recordings";
+const NOTES_KEY = STORAGE_KEYS.NOTES;
+const RECORDINGS_KEY = STORAGE_KEYS.RECORDINGS;
 
 async function loadJson<T>(key: string, fallback: T): Promise<T> {
   try {

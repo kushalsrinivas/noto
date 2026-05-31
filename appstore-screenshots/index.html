@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Haven AI — App Store Screenshot Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --bg: #09090b;
+        --surface: #18181b;
+        --border: #27272a;
+        --text: #fafafa;
+        --text-secondary: #71717a;
+        --accent: #e85d25;
+        --accent-hover: #d14e1a;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter",
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        padding: 80px 48px;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 64px;
+      }
+
+      .header h1 {
+        font-size: 48px;
+        font-weight: 800;
+        letter-spacing: -1.5px;
+        margin-bottom: 16px;
+        background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .header p {
+        font-size: 18px;
+        color: var(--text-secondary);
+        max-width: 560px;
+        margin: 0 auto;
+        line-height: 1.6;
+      }
+
+      .note {
+        text-align: center;
+        margin-bottom: 48px;
+        padding: 16px 24px;
+        background: #1c1917;
+        border: 1px solid #292524;
+        border-radius: 12px;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+        font-size: 13px;
+        color: #a8a29e;
+      }
+
+      .note code {
+        background: #292524;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+
+      .controls {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 48px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        padding: 14px 24px;
+        border-radius: 10px;
+        border: none;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        letter-spacing: -0.2px;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: white;
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: var(--accent-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(232, 93, 37, 0.3);
+      }
+
+      .btn-secondary {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: #27272a;
+        transform: translateY(-1px);
+      }
+
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none !important;
+        box-shadow: none !important;
+      }
+
+      .progress-container {
+        max-width: 480px;
+        margin: 0 auto 24px;
+        display: none;
+      }
+
+      .progress-container.active {
+        display: block;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 3px;
+        background: var(--surface);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 2px;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
+
+      .status {
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 13px;
+        margin-bottom: 56px;
+        min-height: 18px;
+      }
+
+      .section {
+        margin-bottom: 96px;
+      }
+
+      .section-header {
+        margin-bottom: 32px;
+      }
+
+      .section-title {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        margin-bottom: 6px;
+      }
+
+      .section-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+      }
+
+      .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 20px;
+      }
+
+      .preview-card {
+        background: var(--surface);
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        transition: all 0.2s ease;
+      }
+
+      .preview-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      }
+
+      .preview-card img {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      .preview-card .meta {
+        padding: 14px 16px;
+        border-top: 1px solid var(--border);
+      }
+
+      .preview-card .meta h4 {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+
+      .preview-card .meta p {
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+
+      /* Off-screen rendering area */
+      .render-container {
+        position: fixed;
+        left: -99999px;
+        top: 0;
+        pointer-events: none;
+      }
+
+      /* ============ SLIDE TEMPLATES ============ */
+
+      /* iPhone: 1284 x 2778 */
+      .slide-iphone {
+        width: 1284px;
+        height: 2778px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .slide-iphone .slide-content {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 130px 80px 0;
+      }
+
+      .slide-iphone .text-block {
+        text-align: center;
+        margin-bottom: 40px;
+        z-index: 2;
+      }
+
+      .slide-iphone .text-block h2 {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+        font-size: 120px;
+        font-weight: 800;
+        letter-spacing: -4px;
+        line-height: 1;
+        margin-bottom: 24px;
+      }
+
+      .slide-iphone .text-block p {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        font-size: 46px;
+        font-weight: 400;
+        line-height: 1.3;
+        letter-spacing: -0.5px;
+      }
+
+      .slide-iphone .device-wrap {
+        flex: 1;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        z-index: 2;
+        padding-bottom: 0;
+      }
+
+      .slide-iphone .device-wrap img {
+        width: 1100px;
+        height: auto;
+        filter: drop-shadow(0 40px 80px rgba(0, 0, 0, 0.12))
+          drop-shadow(0 16px 40px rgba(0, 0, 0, 0.08));
+      }
+
+      /* iPad: 2048 x 2732 */
+      .slide-ipad {
+        width: 2048px;
+        height: 2732px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .slide-ipad .slide-content {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 150px 120px 0;
+      }
+
+      .slide-ipad .text-block {
+        text-align: center;
+        margin-bottom: 50px;
+        z-index: 2;
+      }
+
+      .slide-ipad .text-block h2 {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+        font-size: 148px;
+        font-weight: 800;
+        letter-spacing: -4px;
+        line-height: 1;
+        margin-bottom: 32px;
+      }
+
+      .slide-ipad .text-block p {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        font-size: 58px;
+        font-weight: 400;
+        line-height: 1.3;
+        letter-spacing: -0.5px;
+      }
+
+      .slide-ipad .device-wrap {
+        flex: 1;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        z-index: 2;
+        padding-bottom: 0;
+      }
+
+      .slide-ipad .device-wrap img {
+        width: 1340px;
+        height: auto;
+        filter: drop-shadow(0 50px 100px rgba(0, 0, 0, 0.12))
+          drop-shadow(0 20px 50px rgba(0, 0, 0, 0.08));
+      }
+
+      /* ============ BACKGROUND GRADIENTS ============ */
+      .bg-warm-cream {
+        background: linear-gradient(
+          175deg,
+          #fffbf5 0%,
+          #fff0e1 40%,
+          #ffe4cc 100%
+        );
+      }
+      .bg-snow {
+        background: linear-gradient(
+          175deg,
+          #ffffff 0%,
+          #fafafa 40%,
+          #f2f2f7 100%
+        );
+      }
+      .bg-lavender {
+        background: linear-gradient(
+          175deg,
+          #faf5ff 0%,
+          #f3e8ff 40%,
+          #e9d5ff 100%
+        );
+      }
+      .bg-sky {
+        background: linear-gradient(
+          175deg,
+          #f0f9ff 0%,
+          #e0f2fe 40%,
+          #bae6fd 100%
+        );
+      }
+      .bg-sage {
+        background: linear-gradient(
+          175deg,
+          #f0fdf4 0%,
+          #dcfce7 40%,
+          #bbf7d0 100%
+        );
+      }
+      .bg-rose {
+        background: linear-gradient(
+          175deg,
+          #fff1f2 0%,
+          #ffe4e6 40%,
+          #fecdd3 100%
+        );
+      }
+      .bg-pearl {
+        background: linear-gradient(
+          175deg,
+          #f8fafc 0%,
+          #f1f5f9 40%,
+          #e2e8f0 100%
+        );
+      }
+      .bg-sand {
+        background: linear-gradient(
+          175deg,
+          #fefce8 0%,
+          #fef9c3 40%,
+          #fde68a 100%
+        );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Haven AI</h1>
+      <p>
+        Generate production-ready App Store screenshots with premium marketing
+        layouts. Optimized for both iPhone 6.7" and iPad 12.9" displays.
+      </p>
+    </div>
+
+    <div class="note">
+      Serve this file locally for best results:
+      <code>python3 -m http.server 8080</code> then open
+      <code>localhost:8080</code>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" onclick="generateAll()" id="btn-all">
+        Generate All Screenshots
+      </button>
+      <button
+        class="btn btn-secondary"
+        onclick="downloadIPhone()"
+        id="btn-iphone"
+        disabled
+      >
+        Download iPhone ZIP
+      </button>
+      <button
+        class="btn btn-secondary"
+        onclick="downloadIPad()"
+        id="btn-ipad"
+        disabled
+      >
+        Download iPad ZIP
+      </button>
+      <button
+        class="btn btn-secondary"
+        onclick="downloadAllZip()"
+        id="btn-zip"
+        disabled
+      >
+        Download All as ZIP
+      </button>
+    </div>
+
+    <div class="progress-container" id="progress-container">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+
+    <div class="section" id="iphone-section" style="display: none">
+      <div class="section-header">
+        <h2 class="section-title">iPhone Screenshots</h2>
+        <p class="section-subtitle">
+          1284 × 2778px — Optimized for iPhone 6.7" (iPhone 15 Pro Max)
+        </p>
+      </div>
+      <div class="preview-grid" id="iphone-previews"></div>
+    </div>
+
+    <div class="section" id="ipad-section" style="display: none">
+      <div class="section-header">
+        <h2 class="section-title">iPad Screenshots</h2>
+        <p class="section-subtitle">
+          2048 × 2732px — Optimized for iPad Pro 12.9"
+        </p>
+      </div>
+      <div class="preview-grid" id="ipad-previews"></div>
+    </div>
+
+    <div class="render-container" id="render-container"></div>
+
+    <script>
+      const SCREENSHOT_DATA = [
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.26.13-portrait.png",
+          title: "Your Second Brain",
+          subtitle: "Everything you need, one tap away",
+          bg: "bg-warm-cream",
+          titleColor: "#1a1a1a",
+          subtitleColor: "#78716c",
+          id: "01-home",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.26.18-portrait.png",
+          title: "All Your Notes,\nOne Place",
+          subtitle: "Voice, written, and AI-organized",
+          bg: "bg-pearl",
+          titleColor: "#1e293b",
+          subtitleColor: "#64748b",
+          id: "02-notes",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.26.22-portrait.png",
+          title: "Organize\nYour Way",
+          subtitle: "Custom folders, colors, and icons",
+          bg: "bg-rose",
+          titleColor: "#4c0519",
+          subtitleColor: "#6b7280",
+          id: "03-folders",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.26.34-portrait.png",
+          title: "Your Day,\nAt a Glance",
+          subtitle: "Tasks and reminders organized by schedule",
+          bg: "bg-sage",
+          titleColor: "#14532d",
+          subtitleColor: "#6b7280",
+          id: "04-calendar-agenda",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.26.38-portrait.png",
+          title: "Plan Ahead,\nStay Focused",
+          subtitle: "Full calendar view for the month ahead",
+          bg: "bg-snow",
+          titleColor: "#18181b",
+          subtitleColor: "#71717a",
+          id: "05-calendar-month",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.26.40-portrait.png",
+          title: "Week View,\nZero Clutter",
+          subtitle: "See your week at a glance",
+          bg: "bg-sky",
+          titleColor: "#0c4a6e",
+          subtitleColor: "#64748b",
+          id: "06-calendar-week",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.26.57-portrait.png",
+          title: "Ask Your\nMemory Anything",
+          subtitle: "AI chat that knows everything you've captured",
+          bg: "bg-lavender",
+          titleColor: "#1e1b4b",
+          subtitleColor: "#6b7280",
+          id: "07-chat-ask",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.27.27-portrait.png",
+          title: "Instant Answers\nfrom Your Notes",
+          subtitle: "AI-powered search with cited sources",
+          bg: "bg-warm-cream",
+          titleColor: "#1a1a1a",
+          subtitleColor: "#78716c",
+          id: "08-chat-response",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.29.00-portrait.png",
+          title: "Capture Thoughts\nInstantly",
+          subtitle: "Just speak — Haven does the rest",
+          bg: "bg-snow",
+          titleColor: "#18181b",
+          subtitleColor: "#71717a",
+          id: "09-recording",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.31.25-portrait.png",
+          title: "Voice to Text,\nInstantly",
+          subtitle: "On-device transcription that just works",
+          bg: "bg-sand",
+          titleColor: "#713f12",
+          subtitleColor: "#78716c",
+          id: "10-voice-review",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.32.02-portrait.png",
+          title: "Every Word,\nPreserved",
+          subtitle: "Full transcripts searchable forever",
+          bg: "bg-warm-cream",
+          titleColor: "#1a1a1a",
+          subtitleColor: "#78716c",
+          id: "11-transcript",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.32.14-portrait.png",
+          title: "AI That Organizes\nEverything",
+          subtitle: "Summaries, key points, and tasks — automatically",
+          bg: "bg-lavender",
+          titleColor: "#1e1b4b",
+          subtitleColor: "#6b7280",
+          id: "12-ai-summary",
+        },
+        {
+          file: "../apple-iphone-15-black-mockup/Simulator Screenshot - clerk - 2026-05-28 at 20.32.23-portrait.png",
+          title: "Never Miss\na Thing",
+          subtitle: "Smart reminders extracted from your notes",
+          bg: "bg-sage",
+          titleColor: "#14532d",
+          subtitleColor: "#6b7280",
+          id: "13-calendar-tasks",
+        },
+      ];
+
+      let iphoneBlobs = [];
+      let ipadBlobs = [];
+
+      function setStatus(msg) {
+        document.getElementById("status").textContent = msg;
+      }
+
+      function setProgress(pct) {
+        const container = document.getElementById("progress-container");
+        const fill = document.getElementById("progress-fill");
+        container.classList.add("active");
+        fill.style.width = pct + "%";
+        if (pct >= 100) {
+          setTimeout(() => {
+            container.classList.remove("active");
+            fill.style.width = "0%";
+          }, 1500);
+        }
+      }
+
+      function buildSlideDOM(screenshot, deviceType) {
+        const isIPad = deviceType === "ipad";
+        const slideClass = isIPad ? "slide-ipad" : "slide-iphone";
+
+        const slide = document.createElement("div");
+        slide.className = `${slideClass} ${screenshot.bg}`;
+        slide.style.fontFamily =
+          "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif";
+
+        const content = document.createElement("div");
+        content.className = "slide-content";
+
+        const textBlock = document.createElement("div");
+        textBlock.className = "text-block";
+
+        const h2 = document.createElement("h2");
+        h2.innerHTML = screenshot.title.replace(/\n/g, "<br>");
+        h2.style.color = screenshot.titleColor;
+
+        const p = document.createElement("p");
+        p.textContent = screenshot.subtitle;
+        p.style.color = screenshot.subtitleColor;
+
+        textBlock.appendChild(h2);
+        textBlock.appendChild(p);
+
+        const deviceWrap = document.createElement("div");
+        deviceWrap.className = "device-wrap";
+
+        const img = document.createElement("img");
+        img.src = screenshot.file;
+        img.crossOrigin = "anonymous";
+
+        deviceWrap.appendChild(img);
+        content.appendChild(textBlock);
+        content.appendChild(deviceWrap);
+        slide.appendChild(content);
+
+        return { slide, img };
+      }
+
+      async function renderScreenshot(container, screenshot, deviceType) {
+        const { slide, img } = buildSlideDOM(screenshot, deviceType);
+        container.innerHTML = "";
+        container.appendChild(slide);
+
+        await new Promise((resolve, reject) => {
+          if (img.complete && img.naturalWidth > 0) return resolve();
+          img.onload = resolve;
+          img.onerror = () =>
+            reject(new Error(`Failed to load: ${screenshot.file}`));
+        });
+
+        await new Promise((r) => setTimeout(r, 100));
+
+        const isIPad = deviceType === "ipad";
+        const w = isIPad ? 2048 : 1284;
+        const h = isIPad ? 2732 : 2778;
+
+        const canvas = await html2canvas(slide, {
+          width: w,
+          height: h,
+          scale: 1,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          logging: false,
+          imageTimeout: 15000,
+        });
+
+        return new Promise((resolve) => {
+          canvas.toBlob((blob) => resolve(blob), "image/png", 1.0);
+        });
+      }
+
+      function createPreviewCard(blob, title, dims, containerId) {
+        const url = URL.createObjectURL(blob);
+        const grid = document.getElementById(containerId);
+        const card = document.createElement("div");
+        card.className = "preview-card";
+        card.innerHTML = `
+            <img src="${url}" alt="${title.replace(/\n/g, " ")}" loading="lazy" />
+            <div class="meta">
+                <h4>${title.replace(/\n/g, " ")}</h4>
+                <p>${dims}</p>
+            </div>
+        `;
+        grid.appendChild(card);
+      }
+
+      async function generateAll() {
+        const btn = document.getElementById("btn-all");
+        btn.disabled = true;
+        btn.textContent = "Generating...";
+
+        iphoneBlobs = [];
+        ipadBlobs = [];
+        document.getElementById("iphone-previews").innerHTML = "";
+        document.getElementById("ipad-previews").innerHTML = "";
+        document.getElementById("iphone-section").style.display = "block";
+        document.getElementById("ipad-section").style.display = "block";
+
+        const container = document.getElementById("render-container");
+        const totalSteps = SCREENSHOT_DATA.length * 2;
+        let completed = 0;
+
+        for (let i = 0; i < SCREENSHOT_DATA.length; i++) {
+          const ss = SCREENSHOT_DATA[i];
+          setStatus(
+            `Rendering iPhone screenshot ${i + 1}/${SCREENSHOT_DATA.length} — "${ss.title.replace(/\n/g, " ")}"`,
+          );
+
+          try {
+            const blob = await renderScreenshot(container, ss, "iphone");
+            if (blob) {
+              iphoneBlobs.push({
+                blob,
+                name: `iPhone_${String(i + 1).padStart(2, "0")}_${ss.id}.png`,
+              });
+              createPreviewCard(
+                blob,
+                ss.title,
+                "1284 × 2778px",
+                "iphone-previews",
+              );
+            }
+          } catch (err) {
+            console.error(`iPhone render failed for ${ss.id}:`, err);
+          }
+
+          completed++;
+          setProgress((completed / totalSteps) * 100);
+        }
+
+        for (let i = 0; i < SCREENSHOT_DATA.length; i++) {
+          const ss = SCREENSHOT_DATA[i];
+          setStatus(
+            `Rendering iPad screenshot ${i + 1}/${SCREENSHOT_DATA.length} — "${ss.title.replace(/\n/g, " ")}"`,
+          );
+
+          try {
+            const blob = await renderScreenshot(container, ss, "ipad");
+            if (blob) {
+              ipadBlobs.push({
+                blob,
+                name: `iPad_${String(i + 1).padStart(2, "0")}_${ss.id}.png`,
+              });
+              createPreviewCard(
+                blob,
+                ss.title,
+                "2048 × 2732px",
+                "ipad-previews",
+              );
+            }
+          } catch (err) {
+            console.error(`iPad render failed for ${ss.id}:`, err);
+          }
+
+          completed++;
+          setProgress((completed / totalSteps) * 100);
+        }
+
+        container.innerHTML = "";
+        setProgress(100);
+        setStatus(
+          `Generated ${iphoneBlobs.length} iPhone + ${ipadBlobs.length} iPad screenshots — ready for App Store Connect.`,
+        );
+
+        document.getElementById("btn-iphone").disabled = false;
+        document.getElementById("btn-ipad").disabled = false;
+        document.getElementById("btn-zip").disabled = false;
+        btn.disabled = false;
+        btn.textContent = "Regenerate All";
+      }
+
+      async function createZipFromBlobs(blobs, folderName) {
+        const zip = new JSZip();
+        const folder = zip.folder(folderName);
+        blobs.forEach(({ blob, name }) => folder.file(name, blob));
+        return zip.generateAsync({
+          type: "blob",
+          compression: "DEFLATE",
+          compressionOptions: { level: 6 },
+        });
+      }
+
+      function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      async function downloadIPhone() {
+        if (!iphoneBlobs.length) return;
+        setStatus("Packaging iPhone screenshots...");
+        const zipBlob = await createZipFromBlobs(
+          iphoneBlobs,
+          "haven-ai-iphone",
+        );
+        downloadBlob(zipBlob, "haven-ai-iphone-screenshots.zip");
+        setStatus("iPhone screenshots downloaded.");
+      }
+
+      async function downloadIPad() {
+        if (!ipadBlobs.length) return;
+        setStatus("Packaging iPad screenshots...");
+        const zipBlob = await createZipFromBlobs(ipadBlobs, "haven-ai-ipad");
+        downloadBlob(zipBlob, "haven-ai-ipad-screenshots.zip");
+        setStatus("iPad screenshots downloaded.");
+      }
+
+      async function downloadAllZip() {
+        if (!iphoneBlobs.length && !ipadBlobs.length) return;
+        setStatus("Packaging all screenshots...");
+        const zip = new JSZip();
+        const iphoneFolder = zip.folder("iPhone");
+        const ipadFolder = zip.folder("iPad");
+        iphoneBlobs.forEach(({ blob, name }) => iphoneFolder.file(name, blob));
+        ipadBlobs.forEach(({ blob, name }) => ipadFolder.file(name, blob));
+        const zipBlob = await zip.generateAsync({
+          type: "blob",
+          compression: "DEFLATE",
+          compressionOptions: { level: 6 },
+        });
+        downloadBlob(zipBlob, "haven-ai-appstore-all-screenshots.zip");
+        setStatus("All screenshots packaged and downloaded.");
+      }
+    </script>
+  </body>
+</html>

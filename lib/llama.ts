@@ -146,10 +146,111 @@ export async function complete(
   return result.text.trim();
 }
 
+/**
+ * Strip markdown code fences (```json ... ```) the model often wraps output in.
+ */
+function stripCodeFences(s: string): string {
+  return s.replace(/```(?:json|JSON)?/g, "").trim();
+}
+
+/**
+ * Extract the first *balanced* JSON object/array from arbitrary model text.
+ * A balanced scan (string-aware) is used instead of a greedy `\{[\s\S]*\}`
+ * regex so trailing prose, multiple blocks, or braces inside strings don't
+ * corrupt the candidate.
+ */
+function extractBalanced(text: string, open: "{" | "["): string | null {
+  const close = open === "{" ? "}" : "]";
+  const start = text.indexOf(open);
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * Light syntactic repair for the most common small-model JSON mistakes:
+ * trailing commas and smart quotes. Intentionally conservative — we never
+ * guess at structure, we only fix things that are unambiguously invalid.
+ */
+function repairJson(s: string): string {
+  return s
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'");
+}
+
+/**
+ * Best-effort parse of model output into JSON of the requested shape.
+ * Tries the balanced candidate, then a repaired version. Returns null if
+ * nothing parses.
+ */
+export function parseJsonLoose<T = unknown>(
+  raw: string,
+  shape: "object" | "array",
+): T | null {
+  const cleaned = stripCodeFences(raw);
+  const candidate =
+    extractBalanced(cleaned, shape === "object" ? "{" : "[") ?? cleaned;
+  for (const attempt of [candidate, repairJson(candidate)]) {
+    try {
+      return JSON.parse(attempt) as T;
+    } catch {
+      // try next strategy
+    }
+  }
+  return null;
+}
+
+/**
+ * Run a completion and parse its output as JSON. If the first response can't
+ * be parsed, re-prompt the model once asking it to repair its own output into
+ * strict JSON. Returns null only if both attempts fail.
+ */
+export async function completeJson<T = unknown>(
+  systemPrompt: string,
+  userMessage: string,
+  shape: "object" | "array",
+): Promise<T | null> {
+  const first = await complete(systemPrompt, userMessage);
+  const parsed = parseJsonLoose<T>(first, shape);
+  if (parsed !== null) return parsed;
+
+  const repairSystem = `You output strict JSON only. The previous attempt was not valid JSON.
+Return ONLY a single valid JSON ${shape} — no markdown fences, no commentary, no trailing text.`;
+  const repairUser = `Fix this into a valid JSON ${shape}:\n\n${first}`;
+  const second = await complete(repairSystem, repairUser);
+  return parseJsonLoose<T>(second, shape);
+}
+
+export type AnalyzedTask = {
+  title: string;
+  dueDate?: string;
+  reminderAt?: string;
+};
+
 export type TranscriptAnalysis = {
   summary: string;
   keyPoints: string[];
-  tasks: string[];
+  tasks: AnalyzedTask[];
 };
 
 /**
@@ -158,30 +259,49 @@ export type TranscriptAnalysis = {
 export async function analyzeTranscript(
   transcription: string,
 ): Promise<TranscriptAnalysis> {
-  const systemPrompt = `You are a voice note analysis assistant. Given a transcription, produce a JSON object with exactly these keys:
+  const today = new Date().toISOString().split("T")[0];
+  const systemPrompt = `You are a voice note analysis assistant. Today is ${today}.
+Given a transcription, produce a JSON object with exactly these keys:
 - "summary": a 1-2 sentence summary
 - "keyPoints": an array of key points (strings)
-- "tasks": an array of actionable tasks (strings)
+- "tasks": an array of objects, each with:
+  - "title": the actionable task (string)
+  - "dueDate": optional date/time string if mentioned (e.g. "tomorrow at 7pm", "next Monday", "in 2 hours"). Use the exact words from the transcript.
+  - "reminderAt": optional, same as dueDate if the speaker says "remind me" or similar intent.
 
+If no date is mentioned for a task, omit dueDate and reminderAt.
 Return ONLY valid JSON. No explanation, no markdown.`;
 
-  const response = await complete(
+  const parsed = await completeJson<Record<string, unknown>>(
     systemPrompt,
     `Analyze this voice note:\n\n"${transcription}"`,
+    "object",
   );
 
-  try {
-    const match = response.match(/\{[\s\S]*\}/);
-    if (match) {
-      const parsed = JSON.parse(match[0]);
-      return {
-        summary: typeof parsed.summary === "string" ? parsed.summary : "",
-        keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
-        tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
-      };
-    }
-  } catch {
-    // Fallback: try to extract something useful from plain text
+  if (parsed) {
+    const rawTasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    const tasks: AnalyzedTask[] = rawTasks
+      .map((t: string | Record<string, unknown>): AnalyzedTask | null => {
+        if (typeof t === "string") return t.trim() ? { title: t.trim() } : null;
+        if (t && typeof t === "object" && typeof t.title === "string") {
+          return {
+            title: t.title,
+            dueDate: typeof t.dueDate === "string" ? t.dueDate : undefined,
+            reminderAt:
+              typeof t.reminderAt === "string" ? t.reminderAt : undefined,
+          };
+        }
+        return null;
+      })
+      .filter((t): t is AnalyzedTask => t !== null);
+
+    return {
+      summary: typeof parsed.summary === "string" ? parsed.summary : "",
+      keyPoints: Array.isArray(parsed.keyPoints)
+        ? parsed.keyPoints.filter((p): p is string => typeof p === "string")
+        : [],
+      tasks,
+    };
   }
 
   return { summary: "", keyPoints: [], tasks: [] };

@@ -1,6 +1,8 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -24,6 +26,9 @@ import {
   useTasks,
   useUserName,
 } from "@/store/app-store";
+import { STORAGE_KEYS } from "@/store/storage-keys";
+
+const REMINDERS_PREF_KEY = STORAGE_KEYS.REMINDERS_ENABLED;
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -34,6 +39,27 @@ export default function ProfileScreen() {
   const { recordings } = useRecordings();
   const { resetOnboarding } = useOnboarding();
   const [notifications, setNotifications] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem(REMINDERS_PREF_KEY).then((v) => {
+      if (v !== null) setNotifications(v === "true");
+    });
+  }, []);
+
+  const handleToggleReminders = useCallback(async (enabled: boolean) => {
+    if (enabled) {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Enable notifications in your device settings to receive reminders.",
+        );
+        return;
+      }
+    }
+    setNotifications(enabled);
+    await AsyncStorage.setItem(REMINDERS_PREF_KEY, String(enabled));
+  }, []);
 
   function handleManageRecordings() {
     Alert.alert(
@@ -134,7 +160,7 @@ export default function ProfileScreen() {
           label: "Task reminders",
           toggle: true,
           toggleValue: notifications,
-          onToggle: setNotifications,
+          onToggle: handleToggleReminders,
         },
       ],
     },
@@ -175,12 +201,12 @@ export default function ProfileScreen() {
         <View style={[styles.identityRow, { borderBottomColor: colors.rule }]}>
           <View style={[styles.avatar, { backgroundColor: colors.paper2 }]}>
             <ThemedText style={[styles.avatarText, { color: colors.ink }]}>
-              {name ? name.charAt(0).toUpperCase() : "N"}
+              {name ? name.charAt(0).toUpperCase() : "H"}
             </ThemedText>
           </View>
           <View>
             <ThemedText style={styles.identityName}>
-              {name || "Noto"}
+              {name || "Haven AI"}
             </ThemedText>
             <ThemedText
               style={[styles.identitySub, { color: colors.textTertiary }]}
@@ -268,7 +294,7 @@ export default function ProfileScreen() {
         </Pressable>
 
         <ThemedText style={[styles.version, { color: colors.textTertiary }]}>
-          noto v1.0.0
+          Haven AI v1.0.0
         </ThemedText>
       </ScrollView>
     </SafeAreaView>

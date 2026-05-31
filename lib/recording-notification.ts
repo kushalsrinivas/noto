@@ -1,5 +1,4 @@
 import * as Notifications from "expo-notifications";
-import { router } from "expo-router";
 import { Platform } from "react-native";
 
 const NOTIFICATION_ID = "recording-controls";
@@ -78,7 +77,8 @@ export async function setupRecordingNotifications() {
       } else if (actionId === "STOP") {
         actionCallback?.("stop");
       } else if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-        router.push("/voice/record");
+        // App comes to foreground automatically; the recording screen is already active.
+        // Don't push a new route — that would open a duplicate recording session.
       }
     },
   );

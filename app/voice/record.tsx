@@ -12,7 +12,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
 import { BorderRadius, Spacing } from "@/constants/theme";
@@ -73,6 +73,7 @@ function formatTime(seconds: number) {
 
 export default function RecordScreen() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const [state, setState] = useState<RecordingState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -291,10 +292,8 @@ export default function RecordScreen() {
   }));
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
-      <View style={styles.topBar}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + Spacing.md }]}>
         <Pressable onPress={cancel} hitSlop={12}>
           <MaterialIcons name="close" size={24} color={colors.textSecondary} />
         </Pressable>
@@ -386,7 +385,17 @@ export default function RecordScreen() {
       </View>
 
       {/* Controls */}
-      <View style={styles.controls}>
+      <View
+        style={[
+          styles.controls,
+          {
+            paddingBottom: Math.max(
+              Spacing["5xl"],
+              insets.bottom + Spacing["2xl"],
+            ),
+          },
+        ]}
+      >
         {state !== "idle" && (
           <>
             <Pressable onPress={cancel} style={styles.controlBtn} hitSlop={12}>
@@ -410,7 +419,7 @@ export default function RecordScreen() {
           </>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -420,7 +429,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-end",
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
   },
   timerArea: {
     alignItems: "center",
@@ -474,7 +482,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing["4xl"],
-    paddingBottom: Spacing["5xl"],
   },
   controlBtn: { padding: Spacing.md },
   doneButton: {

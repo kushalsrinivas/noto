@@ -1,43 +1,63 @@
-import { useState } from "react";
-import { View, StyleSheet, ScrollView, Alert, Pressable } from "react-native";
-import { router, Stack, useLocalSearchParams } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { router, Stack, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
+import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
+import { Input } from "@/components/ui/input";
+import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
-import { useTasks } from "@/store/app-store";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { scheduleTaskReminder } from "@/lib/reminder-notifications";
+import { useTasks, type Recurrence } from "@/store/app-store";
 
 type Priority = "low" | "medium" | "high";
 
 export default function TaskEditorScreen() {
   const colors = useColors();
-  const { addTask } = useTasks();
-  const params = useLocalSearchParams<{ prefillTitle?: string }>();
+  const insets = useSafeAreaInsets();
+  const { addTask, updateTask } = useTasks();
+  const params = useLocalSearchParams<{
+    prefillTitle?: string;
+    prefillDueDate?: string;
+    prefillReminder?: string;
+  }>();
 
   const [title, setTitle] = useState(params.prefillTitle ?? "");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
-  const [dueToday, setDueToday] = useState(false);
-  const [dueTomorrow, setDueTomorrow] = useState(false);
+  const [dueDate, setDueDate] = useState<Date | undefined>(
+    params.prefillDueDate ? new Date(params.prefillDueDate) : undefined,
+  );
+  const [reminderTime, setReminderTime] = useState<Date | undefined>(
+    params.prefillReminder ? new Date(params.prefillReminder) : undefined,
+  );
+  const [recurrence, setRecurrence] = useState<Recurrence>("none");
   const [saving, setSaving] = useState(false);
 
-  function getDueDate(): string | undefined {
-    if (dueToday) {
-      const d = new Date();
-      d.setHours(23, 59, 59);
-      return d.toISOString();
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  function setQuickDate(offset: number | undefined) {
+    if (offset === undefined) {
+      setDueDate(undefined);
+      setReminderTime(undefined);
+      return;
     }
-    if (dueTomorrow) {
-      const d = new Date();
-      d.setDate(d.getDate() + 1);
-      d.setHours(23, 59, 59);
-      return d.toISOString();
-    }
-    return undefined;
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    d.setHours(23, 59, 59, 0);
+    setDueDate(d);
   }
 
   async function handleSave() {
@@ -47,12 +67,25 @@ export default function TaskEditorScreen() {
     }
     setSaving(true);
     try {
-      await addTask({
+      const dueDateIso = dueDate?.toISOString();
+      const reminderAtIso = reminderTime?.toISOString();
+
+      const task = await addTask({
         title: title.trim(),
         description: description.trim(),
         priority,
-        dueDate: getDueDate(),
+        dueDate: dueDateIso,
+        reminderAt: reminderAtIso,
+        recurrence: recurrence !== "none" ? recurrence : undefined,
       });
+
+      if (task.reminderAt) {
+        const notifId = await scheduleTaskReminder(task);
+        if (notifId) {
+          await updateTask(task.id, { notificationId: notifId });
+        }
+      }
+
       router.back();
     } catch {
       Alert.alert("Error", "Failed to create task.");
@@ -60,6 +93,23 @@ export default function TaskEditorScreen() {
       setSaving(false);
     }
   }
+
+  const formattedDueDate = dueDate
+    ? dueDate.toLocaleDateString([], {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })
+    : undefined;
+
+  const formattedReminderTime = reminderTime
+    ? reminderTime.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : undefined;
 
   return (
     <>
@@ -81,7 +131,12 @@ export default function TaskEditorScreen() {
       />
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[
+          styles.scroll,
+          {
+            paddingBottom: Math.max(Spacing["5xl"], insets.bottom + Spacing.xl),
+          },
+        ]}
         keyboardDismissMode="interactive"
       >
         <Input
@@ -109,7 +164,7 @@ export default function TaskEditorScreen() {
           >
             PRIORITY
           </ThemedText>
-          <View style={styles.priorityRow}>
+          <View style={styles.row}>
             {(["low", "medium", "high"] as Priority[]).map((p) => (
               <Pressable
                 key={p}
@@ -137,33 +192,136 @@ export default function TaskEditorScreen() {
           <ThemedText
             style={[styles.fieldLabel, { color: colors.textTertiary }]}
           >
-            DUE
+            DUE DATE
           </ThemedText>
-          <View style={styles.dateRow}>
+          <View style={styles.row}>
             <Chip
               label="Today"
-              selected={dueToday}
-              onPress={() => {
-                setDueToday(!dueToday);
-                setDueTomorrow(false);
-              }}
+              selected={
+                dueDate !== undefined &&
+                dueDate.toDateString() === new Date().toDateString()
+              }
+              onPress={() => setQuickDate(0)}
             />
             <Chip
               label="Tomorrow"
-              selected={dueTomorrow}
-              onPress={() => {
-                setDueTomorrow(!dueTomorrow);
-                setDueToday(false);
-              }}
+              selected={
+                dueDate !== undefined &&
+                dueDate.toDateString() ===
+                  new Date(
+                    new Date().setDate(new Date().getDate() + 1),
+                  ).toDateString()
+              }
+              onPress={() => setQuickDate(1)}
             />
             <Chip
               label="None"
-              selected={!dueToday && !dueTomorrow}
-              onPress={() => {
-                setDueToday(false);
-                setDueTomorrow(false);
-              }}
+              selected={!dueDate}
+              onPress={() => setQuickDate(undefined)}
             />
+          </View>
+          <Pressable
+            onPress={() => setShowDatePicker(true)}
+            style={[styles.dateButton, { borderColor: colors.rule }]}
+          >
+            <MaterialIcons
+              name="event"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <ThemedText
+              style={[
+                styles.dateButtonText,
+                { color: formattedDueDate ? colors.ink : colors.muted },
+              ]}
+            >
+              {formattedDueDate || "Pick a date..."}
+            </ThemedText>
+          </Pressable>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={dueDate || new Date()}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "default"}
+              minimumDate={new Date()}
+              onChange={(_, selected) => {
+                setShowDatePicker(Platform.OS === "ios");
+                if (selected) setDueDate(selected);
+              }}
+              themeVariant="light"
+            />
+          )}
+        </View>
+
+        {/* Reminder time */}
+        <View style={styles.fieldSection}>
+          <ThemedText
+            style={[styles.fieldLabel, { color: colors.textTertiary }]}
+          >
+            REMINDER
+          </ThemedText>
+          <Pressable
+            onPress={() => setShowTimePicker(true)}
+            style={[styles.dateButton, { borderColor: colors.rule }]}
+          >
+            <MaterialIcons
+              name="notifications-none"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <ThemedText
+              style={[
+                styles.dateButtonText,
+                { color: formattedReminderTime ? colors.ink : colors.muted },
+              ]}
+            >
+              {formattedReminderTime || "Set a reminder..."}
+            </ThemedText>
+            {reminderTime && (
+              <Pressable onPress={() => setReminderTime(undefined)} hitSlop={8}>
+                <MaterialIcons
+                  name="close"
+                  size={14}
+                  color={colors.textTertiary}
+                />
+              </Pressable>
+            )}
+          </Pressable>
+
+          {showTimePicker && (
+            <DateTimePicker
+              value={reminderTime || dueDate || new Date()}
+              mode="datetime"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              minimumDate={new Date()}
+              onChange={(_, selected) => {
+                setShowTimePicker(Platform.OS === "ios");
+                if (selected) setReminderTime(selected);
+              }}
+              themeVariant="light"
+            />
+          )}
+        </View>
+
+        {/* Recurrence */}
+        <View style={styles.fieldSection}>
+          <ThemedText
+            style={[styles.fieldLabel, { color: colors.textTertiary }]}
+          >
+            REPEAT
+          </ThemedText>
+          <View style={styles.row}>
+            {(["none", "daily", "weekly", "monthly"] as Recurrence[]).map(
+              (r) => (
+                <Chip
+                  key={r}
+                  label={r.charAt(0).toUpperCase() + r.slice(1)}
+                  selected={recurrence === r}
+                  onPress={() => setRecurrence(r)}
+                />
+              ),
+            )}
           </View>
         </View>
 
@@ -181,7 +339,7 @@ export default function TaskEditorScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { padding: Spacing.xl, paddingBottom: Spacing["5xl"] },
+  scroll: { padding: Spacing.xl },
   saveBtn: { fontFamily: "Geist_600SemiBold", fontSize: 15 },
   fieldSection: { marginBottom: Spacing.xl },
   fieldLabel: {
@@ -190,7 +348,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: Spacing.sm,
   },
-  priorityRow: { flexDirection: "row", gap: Spacing.sm },
+  row: { flexDirection: "row", gap: Spacing.sm, flexWrap: "wrap" },
   priorityOption: {
     flex: 1,
     alignItems: "center",
@@ -199,5 +357,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   priorityLabel: { fontFamily: "Geist_500Medium", fontSize: 13 },
-  dateRow: { flexDirection: "row", gap: Spacing.sm },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.sm,
+  },
+  dateButtonText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 14,
+    flex: 1,
+  },
 });

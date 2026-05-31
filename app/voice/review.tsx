@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,6 +25,7 @@ import {
   useRecordings,
   useUsageStats,
 } from "@/store/app-store";
+import { useFolders } from "@/store/folder-store";
 
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -41,11 +43,17 @@ export default function ReviewScreen() {
 
   const { addNote } = useNotes();
   const { addRecording } = useRecordings();
+  const { folders } = useFolders();
   const { complete: onboardingComplete, markComplete } = useOnboarding();
   const { incrementRecording, incrementNote } = useUsageStats();
 
   const [saveAsNote, setSaveAsNote] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(
+    undefined,
+  );
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -110,6 +118,7 @@ export default function ReviewScreen() {
 
       if (saveAsNote) {
         const willTranscribe = isTranscriptionSupported() && !!uri;
+        const noteTags = tags.length > 0 ? [...tags, "voice"] : ["voice"];
 
         const note = await addNote({
           title: willTranscribe
@@ -119,7 +128,8 @@ export default function ReviewScreen() {
             ? "Your recording is being transcribed. This usually takes a few seconds."
             : `Voice recording (${formatDuration(durationSecs)})`,
           source: "voice",
-          tags: ["voice"],
+          tags: noteTags,
+          folderId: selectedFolderId,
           recordingId: recording.id,
           transcriptionStatus: willTranscribe ? "transcribing" : undefined,
         });
@@ -223,6 +233,125 @@ export default function ReviewScreen() {
             />
           </View>
         </View>
+
+        {/* Folder picker */}
+        {saveAsNote && (
+          <View style={styles.section}>
+            <ThemedText
+              style={[styles.sectionLabel, { color: colors.textTertiary }]}
+            >
+              FOLDER
+            </ThemedText>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={styles.folderRow}
+            >
+              <Pressable
+                onPress={() => setSelectedFolderId(undefined)}
+                style={[
+                  styles.folderChip,
+                  {
+                    borderColor: !selectedFolderId ? colors.ink : colors.rule,
+                    backgroundColor: !selectedFolderId
+                      ? colors.ink + "0A"
+                      : colors.paper2,
+                  },
+                ]}
+              >
+                <ThemedText style={styles.folderChipText}>None</ThemedText>
+              </Pressable>
+              {folders.map((f) => (
+                <Pressable
+                  key={f.id}
+                  onPress={() => setSelectedFolderId(f.id)}
+                  style={[
+                    styles.folderChip,
+                    {
+                      borderColor:
+                        selectedFolderId === f.id ? f.color : colors.rule,
+                      backgroundColor:
+                        selectedFolderId === f.id
+                          ? f.color + "14"
+                          : colors.paper2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={f.icon as keyof typeof MaterialIcons.glyphMap}
+                    size={12}
+                    color={
+                      selectedFolderId === f.id ? f.color : colors.textSecondary
+                    }
+                  />
+                  <ThemedText
+                    style={[
+                      styles.folderChipText,
+                      {
+                        color:
+                          selectedFolderId === f.id
+                            ? f.color
+                            : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {f.name}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Tags */}
+        {saveAsNote && (
+          <View style={styles.section}>
+            <ThemedText
+              style={[styles.sectionLabel, { color: colors.textTertiary }]}
+            >
+              TAGS
+            </ThemedText>
+            <View style={styles.tagRow}>
+              {tags.map((tag) => (
+                <Pressable
+                  key={tag}
+                  onPress={() => setTags(tags.filter((t) => t !== tag))}
+                  style={[styles.tagChip, { backgroundColor: colors.paper3 }]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.tagChipText,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {tag}
+                  </ThemedText>
+                  <MaterialIcons name="close" size={10} color={colors.muted} />
+                </Pressable>
+              ))}
+              <TextInput
+                value={tagInput}
+                onChangeText={setTagInput}
+                onSubmitEditing={() => {
+                  const tag = tagInput
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^a-z0-9-_ ]/g, "");
+                  if (tag && !tags.includes(tag)) {
+                    setTags([...tags, tag]);
+                  }
+                  setTagInput("");
+                }}
+                placeholder={tags.length > 0 ? "+ tag" : "Add tags..."}
+                placeholderTextColor={colors.muted}
+                style={[styles.tagInput, { color: colors.ink }]}
+                returnKeyType="done"
+                blurOnSubmit={false}
+              />
+            </View>
+          </View>
+        )}
 
         {/* Recording info */}
         <View style={styles.section}>
@@ -330,6 +459,47 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   optionLabel: { fontFamily: "Geist_400Regular", fontSize: 15 },
+  folderRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  folderChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.pill,
+    borderWidth: 1,
+  },
+  folderChipText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 13,
+  },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  tagChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+  },
+  tagChipText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 12,
+  },
+  tagInput: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 13,
+    paddingVertical: 4,
+    minWidth: 80,
+  },
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",

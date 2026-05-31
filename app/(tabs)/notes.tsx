@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
@@ -13,12 +14,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FolderCard } from "@/components/ui/folder-card";
 import { Input } from "@/components/ui/input";
 import { BorderRadius, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
 import { useNotes, type Note } from "@/store/app-store";
+import { useFolders } from "@/store/folder-store";
 
-type Filter = "all" | "voice" | "manual";
+type Filter = "all" | "voice" | "manual" | "unorganized" | string;
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
@@ -32,6 +35,7 @@ function formatDate(dateStr: string) {
 export default function NotesScreen() {
   const colors = useColors();
   const { notes, reload } = useNotes();
+  const { folders, reload: reloadFolders } = useFolders();
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
 
@@ -43,27 +47,50 @@ export default function NotesScreen() {
   useFocusEffect(
     useCallback(() => {
       reload();
+      reloadFolders();
 
       if (!hasProcessing) return;
       const interval = setInterval(() => reload(), 3000);
       return () => clearInterval(interval);
-    }, [reload, hasProcessing]),
+    }, [reload, reloadFolders, hasProcessing]),
   );
 
   const filtered = notes.filter((n) => {
     if (filter === "voice" && n.source !== "voice") return false;
     if (filter === "manual" && n.source !== "manual") return false;
+    if (filter === "unorganized" && n.folderId) return false;
+    if (
+      filter !== "all" &&
+      filter !== "voice" &&
+      filter !== "manual" &&
+      filter !== "unorganized" &&
+      n.folderId !== filter
+    )
+      return false;
     if (
       search &&
       !n.title.toLowerCase().includes(search.toLowerCase()) &&
-      !n.content.toLowerCase().includes(search.toLowerCase())
+      !n.content.toLowerCase().includes(search.toLowerCase()) &&
+      !n.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()))
     )
       return false;
     return true;
   });
 
+  const folderNoteCounts = notes.reduce<Record<string, number>>((acc, n) => {
+    if (n.folderId) acc[n.folderId] = (acc[n.folderId] || 0) + 1;
+    return acc;
+  }, {});
+  const foldersWithCounts = folders.map((f) => ({
+    ...f,
+    noteCount: folderNoteCounts[f.id] || 0,
+  }));
+
+  const folderMap = Object.fromEntries(foldersWithCounts.map((f) => [f.id, f]));
+
   function renderNote({ item }: { item: Note }) {
     const isTranscribing = item.transcriptionStatus === "transcribing";
+    const noteFolder = item.folderId ? folderMap[item.folderId] : undefined;
 
     return (
       <Pressable
@@ -112,6 +139,48 @@ export default function NotesScreen() {
               />
             )}
           </View>
+
+          {(noteFolder || item.tags.length > 0) && (
+            <View style={styles.metaRow}>
+              {noteFolder && (
+                <View
+                  style={[
+                    styles.folderBadge,
+                    { backgroundColor: noteFolder.color + "14" },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={
+                      noteFolder.icon as keyof typeof MaterialIcons.glyphMap
+                    }
+                    size={10}
+                    color={noteFolder.color}
+                  />
+                  <ThemedText
+                    style={[
+                      styles.folderBadgeText,
+                      { color: noteFolder.color },
+                    ]}
+                  >
+                    {noteFolder.name}
+                  </ThemedText>
+                </View>
+              )}
+              {item.tags.slice(0, 3).map((tag) => (
+                <View
+                  key={tag}
+                  style={[styles.tagBadge, { backgroundColor: colors.paper3 }]}
+                >
+                  <ThemedText
+                    style={[styles.tagText, { color: colors.textTertiary }]}
+                  >
+                    {tag}
+                  </ThemedText>
+                </View>
+              ))}
+            </View>
+          )}
+
           {item.aiStatus === "processing" && (
             <View
               style={[
@@ -153,37 +222,100 @@ export default function NotesScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top"]}
     >
-      {/* Header */}
       <View style={styles.headerRow}>
         <ThemedText style={styles.screenTitle}>Notes</ThemedText>
-        <Pressable onPress={() => router.push("/note/editor")} hitSlop={12}>
-          <MaterialIcons name="add" size={24} color={colors.ink} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={() => router.push("/folder/editor")} hitSlop={12}>
+            <MaterialIcons
+              name="create-new-folder"
+              size={22}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+          <Pressable onPress={() => router.push("/note/editor")} hitSlop={12}>
+            <MaterialIcons name="add" size={24} color={colors.ink} />
+          </Pressable>
+        </View>
       </View>
 
-      {/* Search */}
+      {folders.length > 0 && (
+        <View style={styles.foldersSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.foldersScroll}
+          >
+            {foldersWithCounts.map((folder) => (
+              <FolderCard
+                key={folder.id}
+                folder={folder}
+                compact
+                onPress={() => router.push(`/folder/${folder.id}`)}
+              />
+            ))}
+            <Pressable
+              onPress={() => router.push("/folder/editor")}
+              style={[
+                styles.addFolderCard,
+                {
+                  borderColor: colors.rule,
+                  backgroundColor: colors.paper2,
+                },
+              ]}
+            >
+              <MaterialIcons name="add" size={20} color={colors.textTertiary} />
+            </Pressable>
+          </ScrollView>
+        </View>
+      )}
+
       <View style={styles.searchRow}>
         <Input
-          placeholder="Search"
+          placeholder="Search notes, tags..."
           value={search}
           onChangeText={setSearch}
           containerStyle={styles.searchInput}
         />
       </View>
 
-      {/* Filter chips */}
-      <View style={styles.filterRow}>
-        {(["all", "voice", "manual"] as Filter[]).map((f) => (
-          <Chip
-            key={f}
-            label={f === "all" ? "All" : f === "voice" ? "Voice" : "Written"}
-            selected={filter === f}
-            onPress={() => setFilter(f)}
-          />
-        ))}
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+        style={styles.filterScroll}
+      >
+        <Chip
+          label="All"
+          selected={filter === "all"}
+          onPress={() => setFilter("all")}
+        />
+        <Chip
+          label="Voice"
+          selected={filter === "voice"}
+          onPress={() => setFilter("voice")}
+        />
+        <Chip
+          label="Written"
+          selected={filter === "manual"}
+          onPress={() => setFilter("manual")}
+        />
+        <Chip
+          label="Unorganized"
+          selected={filter === "unorganized"}
+          onPress={() => setFilter("unorganized")}
+        />
+        {folders
+          .filter((f) => f.pinned)
+          .map((f) => (
+            <Chip
+              key={f.id}
+              label={f.name}
+              selected={filter === f.id}
+              onPress={() => setFilter(f.id)}
+            />
+          ))}
+      </ScrollView>
 
-      {/* Notes list */}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -221,10 +353,32 @@ const styles = StyleSheet.create({
     paddingTop: Spacing["2xl"],
     paddingBottom: Spacing.md,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.lg,
+  },
   screenTitle: {
     fontFamily: "Geist_700Bold",
     fontSize: 26,
     letterSpacing: -0.5,
+  },
+  foldersSection: {
+    marginBottom: Spacing.md,
+  },
+  foldersScroll: {
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+    alignItems: "center",
+  },
+  addFolderCard: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
   },
   searchRow: {
     paddingHorizontal: Spacing.xl,
@@ -233,8 +387,12 @@ const styles = StyleSheet.create({
   searchInput: {
     width: "100%",
   },
+  filterScroll: {
+    flexGrow: 0,
+  },
   filterRow: {
     flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.sm,
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.md,
@@ -286,6 +444,33 @@ const styles = StyleSheet.create({
   voiceIcon: {
     marginLeft: Spacing.sm,
     marginTop: 3,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 4,
+  },
+  folderBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  folderBadgeText: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 10,
+  },
+  tagBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  tagText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 10,
   },
   transcribingRow: {
     flexDirection: "row",

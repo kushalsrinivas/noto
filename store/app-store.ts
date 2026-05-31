@@ -2,16 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 
 import { syncWidgetData } from "@/lib/widget-sync";
-
-const STORAGE_KEYS = {
-  ONBOARDING_COMPLETE: "@noto/onboarding_complete",
-  NOTES: "@noto/notes",
-  TASKS: "@noto/tasks",
-  RECORDINGS: "@noto/recordings",
-  USER_NAME: "@noto/user_name",
-  AI_MODE: "@noto/ai_mode",
-  USAGE_STATS: "@noto/usage_stats",
-} as const;
+import { STORAGE_KEYS } from "@/store/storage-keys";
 
 export type Note = {
   id: string;
@@ -21,6 +12,7 @@ export type Note = {
   updatedAt: string;
   source: "voice" | "manual";
   tags: string[];
+  folderId?: string;
   recordingId?: string;
   transcriptionStatus?: "transcribing" | "done" | "failed";
   transcriptionError?: string;
@@ -28,7 +20,14 @@ export type Note = {
   aiKeyPoints?: string[];
   aiTasks?: string[];
   aiStatus?: "processing" | "done" | "failed";
+  pendingFolderSuggestion?: {
+    folderId?: string;
+    folderName: string;
+    confidence: number;
+  };
 };
+
+export type Recurrence = "none" | "daily" | "weekly" | "monthly";
 
 export type Task = {
   id: string;
@@ -36,6 +35,10 @@ export type Task = {
   description: string;
   completed: boolean;
   dueDate?: string;
+  reminderAt?: string;
+  recurrence?: Recurrence;
+  notificationId?: string;
+  snoozedUntil?: string;
   priority: "low" | "medium" | "high";
   createdAt: string;
   completedAt?: string;
@@ -146,6 +149,7 @@ export function useNotes() {
 
   const updateNote = useCallback(
     async (id: string, changes: Partial<Note>) => {
+      const oldNote = notes.find((n) => n.id === id);
       const updated = notes.map((n) =>
         n.id === id
           ? { ...n, ...changes, updatedAt: new Date().toISOString() }
@@ -158,17 +162,42 @@ export function useNotes() {
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       )[0];
       syncWidgetData(updated.length, latest?.title || "Untitled");
+
+      if (
+        changes.folderId !== undefined &&
+        changes.folderId !== oldNote?.folderId
+      ) {
+        import("@/lib/folder-classifier")
+          .then((m) => {
+            if (changes.folderId)
+              m.debouncedRegenerateFolderSummary(changes.folderId);
+            if (oldNote?.folderId)
+              m.debouncedRegenerateFolderSummary(oldNote.folderId);
+          })
+          .catch(() => {});
+      }
     },
     [notes],
   );
 
   const deleteNote = useCallback(
     async (id: string) => {
+      const deletedNote = notes.find((n) => n.id === id);
       const updated = notes.filter((n) => n.id !== id);
       await saveJson(STORAGE_KEYS.NOTES, updated);
       setNotes(updated);
       const latest = updated[0];
       syncWidgetData(updated.length, latest?.title);
+      import("@/lib/embeddings").then((m) =>
+        m.removeNoteEmbedding(id).catch(() => {}),
+      );
+      if (deletedNote?.folderId) {
+        import("@/lib/folder-classifier")
+          .then((m) =>
+            m.debouncedRegenerateFolderSummary(deletedNote.folderId!),
+          )
+          .catch(() => {});
+      }
     },
     [notes],
   );
@@ -374,11 +403,14 @@ export function useAiMode() {
   return { mode, setMode };
 }
 
+export async function loadTasksRaw(): Promise<Task[]> {
+  return loadJson<Task[]>(STORAGE_KEYS.TASKS, []);
+}
+
+export async function saveTasksRaw(tasks: Task[]): Promise<void> {
+  await saveJson(STORAGE_KEYS.TASKS, tasks);
+}
+
 export async function clearAllUserData(): Promise<void> {
-  const keys = Object.values(STORAGE_KEYS);
-  await AsyncStorage.multiRemove([
-    ...keys,
-    "@noto/llm_download_prompted",
-    "@noto/embeddings",
-  ]);
+  await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS));
 }

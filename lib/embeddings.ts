@@ -1,8 +1,9 @@
 import type { Note } from "@/store/app-store";
+import { STORAGE_KEYS } from "@/store/storage-keys";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getContext, isLlmModelDownloaded, isLlmSupported } from "./llama";
 
-const EMBEDDINGS_KEY = "@noto/embeddings";
+const EMBEDDINGS_KEY = STORAGE_KEYS.EMBEDDINGS;
 
 type EmbeddingEntry = {
   noteId: string;

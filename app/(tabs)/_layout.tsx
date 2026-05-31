@@ -1,6 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Redirect, Tabs } from "expo-router";
-import { Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { Colors, Spacing } from "@/constants/theme";
@@ -22,10 +23,13 @@ export default function TabLayout() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const { complete } = useOnboarding();
+  const insets = useSafeAreaInsets();
 
   if (complete === false) {
     return <Redirect href="/onboarding" />;
   }
+
+  const bottomInset = Math.max(insets.bottom, 6);
 
   return (
     <Tabs
@@ -38,8 +42,8 @@ export default function TabLayout() {
           backgroundColor: colors.surface,
           borderTopColor: colors.ruleLight,
           borderTopWidth: StyleSheet.hairlineWidth,
-          height: Platform.OS === "ios" ? 84 : 60,
-          paddingBottom: Platform.OS === "ios" ? 24 : 6,
+          height: 56 + bottomInset,
+          paddingBottom: bottomInset,
           paddingTop: Spacing.sm,
         },
         tabBarLabelStyle: {
@@ -77,18 +81,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="tasks"
+        name="calendar"
         options={{
-          title: "Tasks",
+          title: "Calendar",
           tabBarIcon: ({ color }) => (
-            <MaterialIcons
-              name="check-circle-outline"
-              size={22}
-              color={color}
-            />
+            <MaterialIcons name="event" size={22} color={color} />
           ),
         }}
       />
+      <Tabs.Screen name="tasks" options={{ href: null }} />
       <Tabs.Screen
         name="chat"
         options={{

@@ -19,7 +19,11 @@ import "react-native-reanimated";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { setupRecordingNotifications } from "@/lib/recording-notification";
-import { useOnboarding } from "@/store/app-store";
+import {
+  reconcileReminders,
+  setupReminderNotifications,
+} from "@/lib/reminder-notifications";
+import { loadTasksRaw, useOnboarding } from "@/store/app-store";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -68,6 +72,8 @@ export default function RootLayout() {
     if (ready) {
       SplashScreen.hideAsync();
       setupRecordingNotifications();
+      setupReminderNotifications();
+      loadTasksRaw().then((tasks) => reconcileReminders(tasks).catch(() => {}));
     }
   }, [ready]);
 
@@ -102,6 +108,14 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="voice/review"
+          options={{ headerShown: true, title: "", presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="folder/[id]"
+          options={{ headerShown: true, title: "" }}
+        />
+        <Stack.Screen
+          name="folder/editor"
           options={{ headerShown: true, title: "", presentation: "modal" }}
         />
         <Stack.Screen name="chat" options={{ headerShown: false }} />

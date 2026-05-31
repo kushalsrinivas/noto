@@ -170,6 +170,19 @@ export const Typography = {
   },
 } as const;
 
+export const FolderColors = [
+  "#E8590C",
+  "#2D7A3A",
+  "#2563EB",
+  "#7C3AED",
+  "#DC2626",
+  "#CA8A04",
+  "#0D9488",
+  "#DB2777",
+  "#475569",
+  "#92400E",
+] as const;
+
 export const Fonts = Platform.select({
   ios: {
     sans: "Geist_400Regular",

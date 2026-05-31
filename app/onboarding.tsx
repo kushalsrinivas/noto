@@ -50,7 +50,7 @@ function WelcomeStep({ colors }: Pick<StepProps, "colors">) {
           <MaterialIcons name="auto-awesome" size={40} color={colors.accent} />
         </View>
       </View>
-      <ThemedText style={stepStyles.title}>Welcome to Noto</ThemedText>
+      <ThemedText style={stepStyles.title}>Welcome to Haven AI</ThemedText>
       <ThemedText
         style={[stepStyles.subtitle, { color: colors.textSecondary }]}
       >

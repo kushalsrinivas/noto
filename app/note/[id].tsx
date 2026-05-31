@@ -9,32 +9,45 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { FolderSuggestionModal } from "@/components/folder-suggestion";
 import { ThemedText } from "@/components/themed-text";
-import { BorderRadius, Spacing } from "@/constants/theme";
+import { BorderRadius, FolderColors, Spacing } from "@/constants/theme";
 import { useColors } from "@/hooks/use-theme-color";
 import { retryTranscription } from "@/lib/transcription-queue";
 import { useNotes } from "@/store/app-store";
+import { useFolders } from "@/store/folder-store";
 
 type Tab = "transcript" | "summary";
 
 export default function NoteDetailScreen() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { notes, updateNote, deleteNote, reload } = useNotes();
+  const { folders, addFolder } = useFolders();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [retrying, setRetrying] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("transcript");
+  const [showSuggestion, setShowSuggestion] = useState(false);
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
 
   const note = notes.find((n) => n.id === id);
+  const noteFolder = note?.folderId
+    ? folders.find((f) => f.id === note.folderId)
+    : undefined;
   const isTranscribing = note?.transcriptionStatus === "transcribing";
   const isAiProcessing = note?.aiStatus === "processing";
 
@@ -53,6 +66,7 @@ export default function NoteDetailScreen() {
     if (note) {
       setTitle(note.title);
       setContent(note.content);
+      setEditTags(note.tags);
     }
   }, [note?.id, note?.transcriptionStatus, note?.content]);
 
@@ -81,8 +95,23 @@ export default function NoteDetailScreen() {
   }
 
   function handleSave() {
-    updateNote(note!.id, { title, content });
+    updateNote(note!.id, { title, content, tags: editTags });
     setEditing(false);
+  }
+
+  function handleAddTag() {
+    const tag = tagInput
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-_ ]/g, "");
+    if (tag && !editTags.includes(tag)) {
+      setEditTags([...editTags, tag]);
+    }
+    setTagInput("");
+  }
+
+  function handleRemoveTag(tag: string) {
+    setEditTags(editTags.filter((t) => t !== tag));
   }
 
   function handleDelete() {
@@ -143,7 +172,12 @@ export default function NoteDetailScreen() {
       />
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[
+          styles.scroll,
+          {
+            paddingBottom: Math.max(Spacing["5xl"], insets.bottom + Spacing.xl),
+          },
+        ]}
       >
         {/* Badges */}
         {note.source === "voice" && (
@@ -220,6 +254,118 @@ export default function NoteDetailScreen() {
         <ThemedText style={[styles.date, { color: colors.textTertiary }]}>
           {formattedDate}
         </ThemedText>
+
+        {/* Folder & Tags */}
+        <View style={styles.metaSection}>
+          {noteFolder ? (
+            <Pressable
+              onPress={() => router.push(`/folder/${noteFolder.id}`)}
+              style={[
+                styles.folderChip,
+                { backgroundColor: noteFolder.color + "14" },
+              ]}
+            >
+              <MaterialIcons
+                name={noteFolder.icon as keyof typeof MaterialIcons.glyphMap}
+                size={12}
+                color={noteFolder.color}
+              />
+              <ThemedText
+                style={[styles.folderChipText, { color: noteFolder.color }]}
+              >
+                {noteFolder.name}
+              </ThemedText>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => setShowFolderPicker(true)}
+              style={[styles.folderChip, { backgroundColor: colors.paper3 }]}
+            >
+              <MaterialIcons
+                name="folder-open"
+                size={12}
+                color={colors.textTertiary}
+              />
+              <ThemedText
+                style={[styles.folderChipText, { color: colors.textTertiary }]}
+              >
+                Add to folder
+              </ThemedText>
+            </Pressable>
+          )}
+          {editing ? (
+            <>
+              {editTags.map((tag) => (
+                <Pressable
+                  key={tag}
+                  onPress={() => handleRemoveTag(tag)}
+                  style={[styles.tagChip, { backgroundColor: colors.paper3 }]}
+                >
+                  <ThemedText
+                    style={[styles.tagChipText, { color: colors.textTertiary }]}
+                  >
+                    {tag}
+                  </ThemedText>
+                  <MaterialIcons name="close" size={10} color={colors.muted} />
+                </Pressable>
+              ))}
+              <TextInput
+                value={tagInput}
+                onChangeText={setTagInput}
+                onSubmitEditing={handleAddTag}
+                placeholder="+ tag"
+                placeholderTextColor={colors.muted}
+                style={[styles.tagInput, { color: colors.ink }]}
+                returnKeyType="done"
+                blurOnSubmit={false}
+              />
+            </>
+          ) : (
+            note.tags.map((tag) => (
+              <View
+                key={tag}
+                style={[styles.tagChip, { backgroundColor: colors.paper3 }]}
+              >
+                <ThemedText
+                  style={[styles.tagChipText, { color: colors.textTertiary }]}
+                >
+                  {tag}
+                </ThemedText>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* AI folder suggestion */}
+        {note.pendingFolderSuggestion && !note.folderId && (
+          <Pressable
+            onPress={() => setShowSuggestion(true)}
+            style={[
+              styles.suggestionBanner,
+              {
+                backgroundColor: colors.accentMuted,
+                borderColor: colors.accent + "30",
+              },
+            ]}
+          >
+            <MaterialIcons
+              name="auto-awesome"
+              size={14}
+              color={colors.accent}
+            />
+            <ThemedText
+              style={[styles.suggestionText, { color: colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              Move to "{note.pendingFolderSuggestion.folderName}"?
+            </ThemedText>
+            <MaterialIcons
+              name="arrow-forward"
+              size={14}
+              color={colors.accent}
+            />
+          </Pressable>
+        )}
 
         {/* Tab bar */}
         <View style={[styles.tabBar, { borderBottomColor: colors.rule }]}>
@@ -528,7 +674,7 @@ export default function NoteDetailScreen() {
                       EXTRACTED TASKS
                     </ThemedText>
                     {note.aiTasks.map((task, i) => (
-                      <View key={i} style={styles.keyPointRow}>
+                      <View key={i} style={styles.taskExtractedRow}>
                         <MaterialIcons
                           name="check-circle-outline"
                           size={14}
@@ -539,6 +685,22 @@ export default function NoteDetailScreen() {
                         >
                           {task}
                         </ThemedText>
+                        <Pressable
+                          onPress={() =>
+                            router.push({
+                              pathname: "/task/editor",
+                              params: { prefillTitle: task },
+                            })
+                          }
+                          hitSlop={8}
+                          style={styles.setReminderBtn}
+                        >
+                          <MaterialIcons
+                            name="notifications-none"
+                            size={14}
+                            color={colors.textTertiary}
+                          />
+                        </Pressable>
                       </View>
                     ))}
                   </View>
@@ -590,13 +752,137 @@ export default function NoteDetailScreen() {
           </View>
         )}
       </ScrollView>
+
+      <Modal
+        visible={showFolderPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFolderPicker(false)}
+      >
+        <Pressable
+          style={styles.pickerOverlay}
+          onPress={() => setShowFolderPicker(false)}
+        >
+          <View
+            style={[
+              styles.pickerSheet,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.rule,
+                paddingBottom: Math.max(
+                  Spacing["3xl"],
+                  insets.bottom + Spacing.md,
+                ),
+              },
+            ]}
+          >
+            <ThemedText style={styles.pickerTitle}>Move to folder</ThemedText>
+
+            {folders.length === 0 ? (
+              <ThemedText
+                style={[styles.pickerEmpty, { color: colors.textTertiary }]}
+              >
+                No folders yet. Create one first.
+              </ThemedText>
+            ) : (
+              <ScrollView style={styles.pickerList}>
+                {folders.map((f) => (
+                  <Pressable
+                    key={f.id}
+                    onPress={async () => {
+                      setShowFolderPicker(false);
+                      await updateNote(note.id, { folderId: f.id });
+                    }}
+                    style={[
+                      styles.pickerRow,
+                      { borderBottomColor: colors.ruleLight },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.pickerIcon,
+                        { backgroundColor: f.color + "18" },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={f.icon as keyof typeof MaterialIcons.glyphMap}
+                        size={18}
+                        color={f.color}
+                      />
+                    </View>
+                    <ThemedText style={styles.pickerRowText}>
+                      {f.name}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+
+            <Pressable
+              onPress={() => {
+                setShowFolderPicker(false);
+                router.push("/folder/editor");
+              }}
+              style={[styles.pickerNewBtn, { borderColor: colors.rule }]}
+            >
+              <MaterialIcons
+                name="create-new-folder"
+                size={16}
+                color={colors.accent}
+              />
+              <ThemedText
+                style={[styles.pickerNewText, { color: colors.accent }]}
+              >
+                Create new folder
+              </ThemedText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {note.pendingFolderSuggestion && (
+        <FolderSuggestionModal
+          visible={showSuggestion}
+          folderName={note.pendingFolderSuggestion.folderName}
+          isNewFolder={!note.pendingFolderSuggestion.folderId}
+          onDismiss={() => {
+            setShowSuggestion(false);
+            updateNote(note.id, { pendingFolderSuggestion: undefined });
+          }}
+          onAccept={async () => {
+            setShowSuggestion(false);
+            const suggestion = note.pendingFolderSuggestion!;
+            if (suggestion.folderId) {
+              await updateNote(note.id, {
+                folderId: suggestion.folderId,
+                pendingFolderSuggestion: undefined,
+              });
+            } else {
+              const newFolder = await addFolder({
+                name: suggestion.folderName,
+                icon: "folder",
+                color:
+                  FolderColors[Math.floor(Math.random() * FolderColors.length)],
+                pinned: false,
+                archived: false,
+                locked: false,
+                isSmart: true,
+              });
+              await updateNote(note.id, {
+                folderId: newFolder.id,
+                pendingFolderSuggestion: undefined,
+              });
+            }
+          }}
+        />
+      )}
     </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { padding: Spacing.xl, paddingBottom: Spacing["5xl"] },
+  scroll: { padding: Spacing.xl },
   notFound: { textAlign: "center", marginTop: Spacing["5xl"], fontSize: 15 },
   headerActions: { flexDirection: "row", gap: Spacing.lg },
   headerBtn: { fontFamily: "Geist_600SemiBold", fontSize: 15 },
@@ -637,7 +923,58 @@ const styles = StyleSheet.create({
   date: {
     fontFamily: "Geist_400Regular",
     fontSize: 13,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  metaSection: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: Spacing.md,
+  },
+  folderChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  folderChipText: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 12,
+  },
+  tagChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  tagChipText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 11,
+  },
+  tagInput: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 12,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    minWidth: 50,
+  },
+  suggestionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.md,
+  },
+  suggestionText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 13,
+    flex: 1,
   },
   tabBar: {
     flexDirection: "row",
@@ -781,6 +1118,15 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     paddingVertical: Spacing.sm,
   },
+  taskExtractedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  setReminderBtn: {
+    padding: Spacing.xs,
+  },
   keyPointBullet: {
     width: 6,
     height: 6,
@@ -792,5 +1138,64 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     flex: 1,
+  },
+  pickerOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  pickerSheet: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    padding: Spacing["2xl"],
+    paddingBottom: Spacing["3xl"],
+    gap: Spacing.lg,
+    maxHeight: "60%",
+  },
+  pickerTitle: {
+    fontFamily: "Geist_600SemiBold",
+    fontSize: 17,
+  },
+  pickerEmpty: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 14,
+    paddingVertical: Spacing.xl,
+  },
+  pickerList: {
+    flexGrow: 0,
+  },
+  pickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerRowText: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 15,
+    flex: 1,
+  },
+  pickerNewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+  },
+  pickerNewText: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 14,
   },
 });
